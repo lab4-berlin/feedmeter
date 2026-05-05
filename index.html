@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23f7c8d4'/%3E%3Ccircle cx='32' cy='28' r='10' fill='%23fff'/%3E%3Crect x='28' y='34' width='8' height='18' rx='4' fill='%23fff'/%3E%3C/svg%3E" />
   <link rel="apple-touch-icon" href="icon-192.svg" />
-  <link rel="stylesheet" href="styles.css?v=10" />
+  <link rel="stylesheet" href="styles.css?v=12" />
 </head>
 <body>
   <header class="app-header">
@@ -89,11 +89,14 @@
 
       <button class="tile tile-bottle" data-action="bottle" aria-label="Bottle">
         <span class="tile-content">
-          <svg class="tile-svg" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M26 8h12"/>
-            <path d="M24 14h16"/>
-            <path d="M22 20h20l-1.5 30a4 4 0 0 1-4 3.8h-9a4 4 0 0 1-4-3.8z"/>
-            <path d="M26 36h12" opacity="0.5"/>
+          <svg class="tile-svg" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <ellipse cx="32" cy="7" rx="3.5" ry="3"/>
+            <path d="M27 11h10"/>
+            <rect x="23" y="13" width="18" height="5" rx="1"/>
+            <path d="M24 20h16v28a5 5 0 0 1-5 5h-6a5 5 0 0 1-5-5z"/>
+            <line x1="28" y1="30" x2="32" y2="30" opacity="0.45"/>
+            <line x1="28" y1="36" x2="32" y2="36" opacity="0.45"/>
+            <line x1="28" y1="42" x2="32" y2="42" opacity="0.45"/>
           </svg>
           <span class="tile-name">Bottle</span>
         </span>
@@ -106,11 +109,10 @@
 
       <button class="tile tile-pump" data-action="pump" aria-label="Pump">
         <span class="tile-content">
-          <svg class="tile-svg" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <path d="M12 28c0-8 5-14 13-14s13 6 13 14"/>
-            <path d="M14 28h22v6a4 4 0 0 1-4 4H18a4 4 0 0 1-4-4z"/>
-            <path d="M38 31h6a4 4 0 0 1 4 4v6a4 4 0 0 1-4 4h-6"/>
-            <path d="M22 38v8a4 4 0 0 0 4 4h2a4 4 0 0 0 4-4v-8" opacity="0.5"/>
+          <svg class="tile-svg" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <ellipse cx="32" cy="32" rx="22" ry="24"/>
+            <ellipse cx="32" cy="28" rx="6" ry="4"/>
+            <circle cx="32" cy="48" r="2" fill="currentColor" stroke="none"/>
           </svg>
           <span class="tile-name">Pump</span>
         </span>
@@ -315,6 +317,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=10"></script>
+  <script src="app.js?v=12"></script>
 </body>
 </html>

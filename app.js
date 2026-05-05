@@ -803,15 +803,21 @@ function tickMetrics() {
     $('statNext').classList.remove('overdue');
   }
 
-  let feedCount = 0, feedMl = 0;
+  let bottleMl = 0;
+  let breastMs = 0;
   for (const e of state.entries) {
-    if (!TYPE_META[e.type]?.isFeed) continue;
-    if ((e.start || 0) >= todayStart) {
-      feedCount++;
-      if (e.type === 'bottle' && e.volume) feedMl += e.volume;
+    if ((e.start || 0) < todayStart) continue;
+    if (e.type === 'bottle' && e.volume) bottleMl += e.volume;
+    if ((e.type === 'left' || e.type === 'right') && e.start && e.end) {
+      breastMs += (e.end - e.start);
     }
   }
-  $('statTodayFeed').textContent = `${feedCount}× · ${feedMl} ml`;
+  // Include the currently running breast session (if any) in today's total
+  if (active && (active.type === 'left' || active.type === 'right') && active.start >= todayStart) {
+    breastMs += now - active.start;
+  }
+  const breastMin = Math.round(breastMs / 60000);
+  $('statTodayFeed').textContent = `${bottleMl} ml · ${breastMin} min`;
 
   // ----- Pumping -----
   const pumps = state.entries.filter(e => e.type === 'pump' && e.end);
@@ -920,9 +926,10 @@ function entryIconSvg(type) {
     return `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="${cx}" cy="12" r="7"/><circle cx="${cx}" cy="12" r="1.6" fill="currentColor"/></svg>`;
   }
   if (type === 'bottle') {
-    return `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6M10 3v2M14 3v2M8 7h8l-1 14a2 2 0 0 1-2 2h-2a2 2 0 0 1-2-2z"/><line x1="9" y1="13" x2="15" y2="13"/></svg>`;
+    return `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="3" rx="1.4" ry="1.1"/><path d="M10 5h4"/><rect x="8.5" y="6" width="7" height="2" rx="0.5"/><path d="M9 9h6v9.5a2 2 0 0 1-2 2h-2a2 2 0 0 1-2-2z"/><line x1="11" y1="13" x2="13" y2="13" opacity="0.5"/><line x1="11" y1="16" x2="13" y2="16" opacity="0.5"/></svg>`;
   }
-  return `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="7" width="10" height="11" rx="2"/><path d="M14 10h4a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2h-4"/><line x1="7" y1="7" x2="7" y2="5"/><line x1="11" y1="7" x2="11" y2="5"/></svg>`;
+  // pump — wearable cup style (matches tile)
+  return `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="12" rx="8" ry="9"/><ellipse cx="12" cy="10" rx="2.4" ry="1.4"/><circle cx="12" cy="18" r="0.8" fill="currentColor" stroke="none"/></svg>`;
 }
 
 function exportData() {
