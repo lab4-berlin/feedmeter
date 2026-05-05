@@ -61,7 +61,7 @@ $('saveBtn').addEventListener('click', () => {
     return;
   }
 
-  entries.push({
+  const entry = {
     id: cryptoId(),
     type: pendingSave.type,
     start: pendingSave.start,
@@ -69,7 +69,8 @@ $('saveBtn').addEventListener('click', () => {
     volume: meta.needsVolume ? volume : null,
     source: meta.needsSource ? source : null,
     note: null,
-  });
+  };
+  entries.push(entry);
   saveEntries();
   pendingSave = null;
   hideModal(stopModal);
@@ -171,9 +172,11 @@ function stopSession() {
   active = null;
   saveActive();
   stopTick();
+  render();
 
   const meta = TYPE_META[session.type];
-  // Breast sessions need no extra info — save immediately, no popup.
+
+  // Breast feeds: nothing extra to ask, save immediately
   if (!meta.needsVolume && !meta.needsSource) {
     entries.push({
       id: cryptoId(),
@@ -189,7 +192,7 @@ function stopSession() {
     return;
   }
 
-  render();
+  // Bottle / pump: open modal to capture mandatory extras
   pendingSave = session;
   openSaveModal(session);
 }
