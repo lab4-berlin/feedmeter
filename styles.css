@@ -346,6 +346,62 @@ body {
   padding: 4px 6px;
 }
 
+.day-nav {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.day-pick {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s ease, transform 0.08s ease;
+}
+.day-pick:active { transform: scale(0.96); }
+.day-pick:hover { background: var(--surface-2); }
+.day-pick svg { color: var(--plum); flex-shrink: 0; }
+
+.day-step {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--surface);
+  color: var(--plum);
+  cursor: pointer;
+  transition: background 0.12s ease, transform 0.08s ease, opacity 0.12s ease;
+}
+.day-step:active:not([disabled]) { transform: scale(0.92); }
+.day-step:hover:not([disabled]) { background: var(--surface-2); }
+.day-step[disabled] {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.day-input-hidden {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+  border: 0;
+  padding: 0;
+}
+
 .entries {
   list-style: none;
   margin: 0;

@@ -36,6 +36,7 @@ let state = {
   entries: [],
   users: [],
   settings: { feedingIntervalMin: 180, pumpIntervalMin: 240 },
+  historyDate: null, // YYYY-MM-DD or null = today (live)
 };
 let active = loadActive();
 let pendingSave = null;
@@ -104,6 +105,16 @@ function bindEvents() {
   // Header
   $('settingsBtn').addEventListener('click', openSettings);
   userChip.addEventListener('click', openUserPicker);
+
+  // History day picker
+  $('dayPick').addEventListener('click', openDayPicker);
+  $('dayInput').addEventListener('change', onDayPicked);
+  $('backToToday').addEventListener('click', () => {
+    state.historyDate = null;
+    render();
+  });
+  $('dayPrev').addEventListener('click', () => stepDay(-1));
+  $('dayNext').addEventListener('click', () => stepDay(+1));
 
   // User picker
   $('addUserBtn').addEventListener('click', addNewUser);
@@ -635,23 +646,86 @@ function render() {
 }
 
 function renderEntries() {
+  const dayStart = selectedDayStart();
+  const dayEnd = dayStart + 86400000;
+
+  // Update day label, "Today" link, and prev/next disabled state
+  $('dayLabel').textContent = formatDayLabel(dayStart);
+  const isToday = !state.historyDate;
+  $('backToToday').classList.toggle('hidden', isToday);
+  $('dayNext').disabled = isToday;
+
   entriesEl.innerHTML = '';
-  if (!state.entries.length) { emptyState.classList.remove('hidden'); return; }
+  const dayEntries = state.entries
+    .filter(e => {
+      const ts = e.start || e.end || 0;
+      return ts >= dayStart && ts < dayEnd;
+    })
+    .sort((a, b) => (b.start || 0) - (a.start || 0));
+
+  if (!dayEntries.length) {
+    emptyState.classList.remove('hidden');
+    emptyState.textContent = isToday
+      ? 'No feedings logged today. Tap a tile above to start.'
+      : 'No entries on this day. Pick another from the calendar.';
+    return;
+  }
   emptyState.classList.add('hidden');
 
-  const sorted = [...state.entries].sort((a, b) => (b.start || 0) - (a.start || 0));
-  let lastDay = null;
-  for (const e of sorted) {
-    const day = dayKey(e.start);
-    if (day !== lastDay) {
-      const li = document.createElement('li');
-      li.className = 'day-divider';
-      li.textContent = formatDayLabel(e.start);
-      entriesEl.appendChild(li);
-      lastDay = day;
-    }
+  for (const e of dayEntries) {
     entriesEl.appendChild(renderEntry(e));
   }
+}
+
+// ----- Day picker -----
+
+function selectedDayStart() {
+  if (state.historyDate) {
+    const [y, m, d] = state.historyDate.split('-').map(Number);
+    return new Date(y, m - 1, d).getTime();
+  }
+  const t = new Date();
+  return new Date(t.getFullYear(), t.getMonth(), t.getDate()).getTime();
+}
+
+function todayKey() {
+  const d = new Date();
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+function openDayPicker() {
+  const di = $('dayInput');
+  di.value = state.historyDate || todayKey();
+  di.max = todayKey();
+  if (typeof di.showPicker === 'function') {
+    try { di.showPicker(); return; } catch {}
+  }
+  // Fallback: temporarily make the input interactive and focus it
+  di.classList.remove('day-input-hidden');
+  di.focus();
+  di.click();
+  setTimeout(() => di.classList.add('day-input-hidden'), 50);
+}
+
+function onDayPicked() {
+  const v = $('dayInput').value;
+  if (!v) {
+    state.historyDate = null;
+  } else {
+    state.historyDate = v === todayKey() ? null : v;
+  }
+  render();
+}
+
+function stepDay(delta) {
+  const cur = new Date(selectedDayStart());
+  cur.setDate(cur.getDate() + delta);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  if (cur.getTime() > today.getTime()) return; // never future
+  const key = `${cur.getFullYear()}-${pad(cur.getMonth() + 1)}-${pad(cur.getDate())}`;
+  state.historyDate = (key === todayKey()) ? null : key;
+  render();
 }
 
 function renderEntry(e) {
