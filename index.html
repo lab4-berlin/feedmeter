@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23f7c8d4'/%3E%3Ccircle cx='32' cy='28' r='10' fill='%23fff'/%3E%3Crect x='28' y='34' width='8' height='18' rx='4' fill='%23fff'/%3E%3C/svg%3E" />
   <link rel="apple-touch-icon" href="icon-192.svg" />
-  <link rel="stylesheet" href="styles.css?v=6" />
+  <link rel="stylesheet" href="styles.css?v=7" />
 </head>
 <body>
   <header class="app-header">
@@ -122,25 +122,50 @@
     </section>
   </main>
 
-  <!-- Setup modal: API URL + passcode (first run) -->
+  <!-- Setup wizard: connect + pick name in one flow (first run) -->
   <div class="modal hidden" id="setupModal" role="dialog" aria-modal="true" aria-labelledby="setupTitle">
     <div class="modal-card">
-      <h3 id="setupTitle">Connect to your sheet</h3>
-      <p class="modal-sub">Paste the Apps Script URL and enter the family passcode. See <code>SETUP.md</code> for the 5-minute setup.</p>
+      <!-- Step 1: connect -->
+      <div class="setup-step" data-step="connect">
+        <h3 id="setupTitle">Connect to your sheet</h3>
+        <p class="modal-sub">Paste the Apps Script URL and enter the family passcode. See <code>SETUP.md</code> for the 5-minute setup.</p>
 
-      <div class="field">
-        <label for="setupUrl">Apps Script URL</label>
-        <input id="setupUrl" type="url" inputmode="url" autocomplete="off" placeholder="https://script.google.com/macros/s/.../exec" />
+        <div class="field">
+          <label for="setupUrl">Apps Script URL</label>
+          <input id="setupUrl" type="url" inputmode="url" autocomplete="off" placeholder="https://script.google.com/macros/s/.../exec" />
+        </div>
+        <div class="field">
+          <label for="setupPasscode">Passcode</label>
+          <input id="setupPasscode" type="password" autocomplete="off" placeholder="family passcode" />
+        </div>
+
+        <div class="modal-error hidden" id="setupError"></div>
+
+        <div class="modal-actions">
+          <button class="btn primary full" id="setupConnect">Continue</button>
+        </div>
       </div>
-      <div class="field">
-        <label for="setupPasscode">Passcode</label>
-        <input id="setupPasscode" type="password" autocomplete="off" placeholder="family passcode" />
-      </div>
 
-      <div class="modal-error hidden" id="setupError"></div>
+      <!-- Step 2: pick name -->
+      <div class="setup-step hidden" data-step="name">
+        <h3>Who are you?</h3>
+        <p class="modal-sub">Pick your name — we'll remember it on this device. You can change it later from the icon in the top right.</p>
 
-      <div class="modal-actions">
-        <button class="btn primary full" id="setupConnect">Connect</button>
+        <div class="user-list" id="setupUserList" role="radiogroup"></div>
+
+        <div class="field">
+          <label for="setupNewUser">Or add a new name</label>
+          <div class="row-input">
+            <input id="setupNewUser" type="text" maxlength="40" placeholder="e.g. Lena" autocomplete="off" />
+            <button class="btn ghost" id="setupAddUserBtn" type="button">Add</button>
+          </div>
+        </div>
+
+        <div class="modal-error hidden" id="setupUserError"></div>
+
+        <div class="modal-actions">
+          <button class="btn ghost" id="setupBackBtn" type="button">Back</button>
+        </div>
       </div>
     </div>
   </div>
@@ -261,6 +286,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=6"></script>
+  <script src="app.js?v=7"></script>
 </body>
 </html>

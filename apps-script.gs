@@ -31,6 +31,20 @@ function doGet(e) {
   });
 }
 
+/**
+ * Run this once from the Apps Script editor to create the "entries" and
+ * "settings" tabs and seed defaults (passcode "changeme", default users,
+ * intervals). Re-running it is safe — it only seeds when the settings
+ * tab is empty.
+ */
+function init() {
+  ensureInit_();
+  const ss = SpreadsheetApp.getActiveSpreadsheet();
+  Logger.log('FeedMeter ready. Sheet: ' + ss.getName());
+  Logger.log('Tabs: ' + ss.getSheets().map(s => s.getName()).join(', '));
+  Logger.log('Now open the "settings" tab and change "passcode" from "changeme".');
+}
+
 function doPost(e) {
   let body = {};
   try {

@@ -38,7 +38,10 @@ You can leave it empty — the script will create the `entries` and `settings` t
 
 ## Step 4 — Set your passcode
 
-1. Run the script once to seed defaults: in the Apps Script editor, with `doGet` visible, change the function dropdown to **`ensureInit_`** and click **Run**. Authorize again if prompted. (You can also just open the app in your browser; the first request will seed the sheet.)
+1. In the Apps Script editor, change the function dropdown (next to the **Debug** / **Run** buttons) to **`init`** and click **Run**. Authorize again if prompted. This creates the two tabs and seeds the defaults.
+
+   *Note: helper functions whose names end with `_` (like `ensureInit_`) are "private" in Apps Script and won't appear in the dropdown — that's why we have `init` as a public wrapper. If you don't see `init` in the dropdown either, you're still looking at the old version of the script: re-paste the latest `apps-script.gs` from this repo, save (`Cmd/Ctrl+S`), and the dropdown will refresh.*
+
 2. Switch back to the spreadsheet. You'll now see two tabs: **`entries`** and **`settings`**.
 3. In the **`settings`** tab, change the value of the `passcode` row from `changeme` to whatever you want (e.g. a memorable phrase). Use something only your trusted users know — anyone with this passcode and the URL can read/write your data.
 

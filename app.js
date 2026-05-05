@@ -73,7 +73,7 @@ async function init() {
     return;
   }
   if (!state.user) {
-    openUserPicker();
+    openSetup({ step: 'name' });
   }
   if (active) startTick();
   startMetricsTick();
@@ -93,10 +93,13 @@ function bindEvents() {
     }
   });
 
-  // Setup
+  // Setup wizard
   $('setupConnect').addEventListener('click', connectSetup);
   $('setupPasscode').addEventListener('keydown', (e) => { if (e.key === 'Enter') connectSetup(); });
   $('setupUrl').addEventListener('keydown', (e) => { if (e.key === 'Enter') connectSetup(); });
+  $('setupAddUserBtn').addEventListener('click', addSetupUser);
+  $('setupNewUser').addEventListener('keydown', (e) => { if (e.key === 'Enter') addSetupUser(); });
+  $('setupBackBtn').addEventListener('click', () => showSetupStep('connect'));
 
   // Header
   $('settingsBtn').addEventListener('click', openSettings);
@@ -205,14 +208,31 @@ function saveCache() {
   }));
 }
 
-// ----- Setup -----
+// ----- Setup wizard -----
 
-function openSetup() {
-  $('setupUrl').value = state.apiUrl || '';
-  $('setupPasscode').value = '';
+function openSetup(opts = {}) {
+  const step = opts.step || 'connect';
   hideError($('setupError'));
+  hideError($('setupUserError'));
+  if (step === 'connect') {
+    $('setupUrl').value = state.apiUrl || '';
+    $('setupPasscode').value = '';
+  } else {
+    $('setupNewUser').value = '';
+    renderSetupUserList();
+  }
+  showSetupStep(step);
   showModal(setupModal);
-  setTimeout(() => $('setupUrl').focus(), 100);
+  setTimeout(() => {
+    if (step === 'connect') $('setupUrl').focus();
+    else $('setupNewUser').focus();
+  }, 120);
+}
+
+function showSetupStep(step) {
+  setupModal.querySelectorAll('.setup-step').forEach(el => {
+    el.classList.toggle('hidden', el.dataset.step !== step);
+  });
 }
 
 async function connectSetup() {
@@ -229,7 +249,7 @@ async function connectSetup() {
   state.passcode = pass;
   try {
     setBusy($('setupConnect'), true);
-    await api('bootstrap'); // validates passcode
+    await bootstrap();
   } catch (err) {
     setBusy($('setupConnect'), false);
     state.apiUrl = state.passcode = '';
@@ -238,9 +258,58 @@ async function connectSetup() {
   setBusy($('setupConnect'), false);
   localStorage.setItem(LS.apiUrl, state.apiUrl);
   localStorage.setItem(LS.passcode, state.passcode);
+  if (state.user) {
+    hideModal(setupModal);
+  } else {
+    renderSetupUserList();
+    showSetupStep('name');
+    setTimeout(() => $('setupNewUser').focus(), 100);
+  }
+}
+
+function renderSetupUserList() {
+  const list = $('setupUserList');
+  list.innerHTML = '';
+  if (!state.users.length) {
+    list.innerHTML = '<p class="empty small">No users yet. Add one below.</p>';
+    return;
+  }
+  state.users.forEach(name => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'user-pick' + (name === state.user ? ' active' : '');
+    btn.innerHTML = `
+      <span class="user-avatar">${escapeHtml(name.charAt(0).toUpperCase())}</span>
+      <span class="user-name">${escapeHtml(name)}</span>
+    `;
+    btn.addEventListener('click', () => pickSetupUser(name));
+    list.appendChild(btn);
+  });
+}
+
+function pickSetupUser(name) {
+  state.user = name;
+  localStorage.setItem(LS.user, name);
   hideModal(setupModal);
-  await bootstrap();
-  if (!state.user) openUserPicker();
+  showSetupStep('connect'); // reset for next time
+  render();
+}
+
+async function addSetupUser() {
+  const name = $('setupNewUser').value.trim();
+  hideError($('setupUserError'));
+  if (!name) return;
+  try {
+    setBusy($('setupAddUserBtn'), true);
+    const data = await api('add-user', { name });
+    state.users = data.users || [];
+    saveCache();
+    pickSetupUser(name);
+  } catch (err) {
+    showError($('setupUserError'), err.message);
+  } finally {
+    setBusy($('setupAddUserBtn'), false);
+  }
 }
 
 // ----- User picker -----
