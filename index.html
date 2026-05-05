@@ -10,8 +10,8 @@
   <title>FeedMeter</title>
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23f7c8d4'/%3E%3Ccircle cx='32' cy='28' r='10' fill='%23fff'/%3E%3Crect x='28' y='34' width='8' height='18' rx='4' fill='%23fff'/%3E%3C/svg%3E" />
-  <link rel="apple-touch-icon" href="icon-180.png" />
-  <link rel="stylesheet" href="styles.css?v=5" />
+  <link rel="apple-touch-icon" href="icon-192.svg" />
+  <link rel="stylesheet" href="styles.css?v=6" />
 </head>
 <body>
   <header class="app-header">
@@ -19,29 +19,38 @@
       <span class="brand-dot" aria-hidden="true"></span>
       <h1>FeedMeter</h1>
     </div>
-    <button class="header-btn" id="exportBtn" title="Export data" aria-label="Export data">
-      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-    </button>
+    <div class="header-actions">
+      <button class="user-chip hidden" id="userChip" title="Switch user" aria-label="Switch user">
+        <span class="user-chip-avatar" id="userChipAvatar">·</span>
+        <span class="user-chip-name" id="userChipName"></span>
+      </button>
+      <button class="header-btn" id="settingsBtn" title="Settings" aria-label="Settings">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      </button>
+    </div>
   </header>
 
-  <main class="container">
-    <!-- Quick stats -->
+  <!-- Sync status banner -->
+  <div class="sync-banner hidden" id="syncBanner" role="status"></div>
+
+  <main class="container" id="appMain">
+    <!-- Top metrics -->
     <section class="stats" id="stats">
       <div class="stat">
-        <span class="stat-label">Last feed</span>
+        <span class="stat-label">Last feeding</span>
         <span class="stat-value" id="statLast">—</span>
       </div>
       <div class="stat">
-        <span class="stat-label">Today (breast)</span>
-        <span class="stat-value" id="statBreast">0 min</span>
+        <span class="stat-label">Next feeding</span>
+        <span class="stat-value" id="statNext">—</span>
       </div>
       <div class="stat">
-        <span class="stat-label">Today (intake)</span>
-        <span class="stat-value" id="statIntake">0 ml</span>
+        <span class="stat-label">Today</span>
+        <span class="stat-value" id="statToday">—</span>
       </div>
     </section>
 
-    <!-- 4 big action buttons -->
+    <!-- 4 big action tiles -->
     <section class="grid" id="actionGrid" aria-label="Start a new session">
       <button class="tile tile-left" data-action="left" aria-label="Left breast">
         <span class="tile-content">
@@ -106,14 +115,90 @@
     <section class="history">
       <div class="history-head">
         <h2>History</h2>
-        <button class="link-btn" id="clearAllBtn">Clear all</button>
+        <button class="link-btn hidden" id="refreshBtn" aria-label="Refresh">Refresh</button>
       </div>
       <ul class="entries" id="entries"></ul>
-      <p class="empty" id="emptyState">No entries yet. Tap a button above to start.</p>
+      <p class="empty" id="emptyState">No entries yet. Tap a tile above to start.</p>
     </section>
   </main>
 
-  <!-- Stop modal: collects extra info per session type -->
+  <!-- Setup modal: API URL + passcode (first run) -->
+  <div class="modal hidden" id="setupModal" role="dialog" aria-modal="true" aria-labelledby="setupTitle">
+    <div class="modal-card">
+      <h3 id="setupTitle">Connect to your sheet</h3>
+      <p class="modal-sub">Paste the Apps Script URL and enter the family passcode. See <code>SETUP.md</code> for the 5-minute setup.</p>
+
+      <div class="field">
+        <label for="setupUrl">Apps Script URL</label>
+        <input id="setupUrl" type="url" inputmode="url" autocomplete="off" placeholder="https://script.google.com/macros/s/.../exec" />
+      </div>
+      <div class="field">
+        <label for="setupPasscode">Passcode</label>
+        <input id="setupPasscode" type="password" autocomplete="off" placeholder="family passcode" />
+      </div>
+
+      <div class="modal-error hidden" id="setupError"></div>
+
+      <div class="modal-actions">
+        <button class="btn primary full" id="setupConnect">Connect</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Pick user modal: shown after successful setup, or via header chip -->
+  <div class="modal hidden" id="userModal" role="dialog" aria-modal="true" aria-labelledby="userTitle">
+    <div class="modal-card">
+      <h3 id="userTitle">Who's logging?</h3>
+      <p class="modal-sub">Pick your name. We'll remember it on this device.</p>
+
+      <div class="user-list" id="userList" role="radiogroup"></div>
+
+      <div class="field" id="newUserField">
+        <label for="newUserInput">Add a new name</label>
+        <div class="row-input">
+          <input id="newUserInput" type="text" maxlength="40" placeholder="e.g. Lena" autocomplete="off" />
+          <button class="btn ghost" id="addUserBtn" type="button">Add</button>
+        </div>
+      </div>
+
+      <div class="modal-error hidden" id="userError"></div>
+
+      <div class="modal-actions space-between">
+        <button class="btn danger" id="resetSetupBtn" type="button">Reset connection</button>
+        <button class="btn primary" id="userCancelBtn" type="button">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings modal -->
+  <div class="modal hidden" id="settingsModal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
+    <div class="modal-card">
+      <h3 id="settingsTitle">Settings</h3>
+      <p class="modal-sub">Saved to the <code>settings</code> tab in your sheet.</p>
+
+      <div class="field">
+        <label for="settingFeed">Feeding interval (minutes)</label>
+        <input id="settingFeed" type="number" inputmode="numeric" min="30" max="600" step="5" />
+        <p class="field-hint">Used for the "next feeding due" countdown. Newborns: 120–180.</p>
+      </div>
+      <div class="field">
+        <label for="settingPump">Pump interval (minutes)</label>
+        <input id="settingPump" type="number" inputmode="numeric" min="30" max="720" step="5" />
+      </div>
+
+      <div class="modal-error hidden" id="settingsError"></div>
+
+      <div class="modal-actions space-between">
+        <button class="btn ghost" id="exportBtn" type="button">Export JSON</button>
+        <div>
+          <button class="btn ghost" id="settingsCancel" type="button">Close</button>
+          <button class="btn primary" id="settingsSave" type="button">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Stop modal: bottle/pump only -->
   <div class="modal hidden" id="stopModal" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
     <div class="modal-card">
       <h3 id="modalTitle">Save session</h3>
@@ -176,6 +261,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=5"></script>
+  <script src="app.js?v=6"></script>
 </body>
 </html>

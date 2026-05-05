@@ -1,163 +1,336 @@
-// ----- Storage -----
-const STORE = {
-  entries: 'feedmeter.entries.v1',
-  active: 'feedmeter.active.v1',
+// ----- Storage keys (per-device) -----
+const LS = {
+  apiUrl: 'feedmeter.apiUrl',
+  passcode: 'feedmeter.passcode',
+  user: 'feedmeter.user',
+  cache: 'feedmeter.cache.v2',     // entries + settings + users
+  active: 'feedmeter.active.v2',   // current running session
 };
 
+// ----- Type metadata -----
 const TYPE_META = {
-  left:   { title: 'Left breast',   short: 'Left',   needsVolume: false, needsSource: false },
-  right:  { title: 'Right breast',  short: 'Right',  needsVolume: false, needsSource: false },
-  bottle: { title: 'Bottle',        short: 'Bottle', needsVolume: true,  needsSource: true  },
-  pump:   { title: 'Pump',          short: 'Pump',   needsVolume: true,  needsSource: false },
+  left:   { title: 'Left breast',  short: 'Left',   needsVolume: false, needsSource: false, isFeed: true  },
+  right:  { title: 'Right breast', short: 'Right',  needsVolume: false, needsSource: false, isFeed: true  },
+  bottle: { title: 'Bottle',       short: 'Bottle', needsVolume: true,  needsSource: true,  isFeed: true  },
+  pump:   { title: 'Pump',         short: 'Pump',   needsVolume: true,  needsSource: false, isFeed: false },
 };
 
-// ----- DOM -----
+// ----- DOM helpers -----
 const $ = (id) => document.getElementById(id);
 const grid = $('actionGrid');
 const entriesEl = $('entries');
 const emptyState = $('emptyState');
 const stopModal = $('stopModal');
 const editModal = $('editModal');
+const setupModal = $('setupModal');
+const userModal = $('userModal');
+const settingsModal = $('settingsModal');
+const syncBanner = $('syncBanner');
+const userChip = $('userChip');
 
 // ----- State -----
+let state = {
+  apiUrl: localStorage.getItem(LS.apiUrl) || '',
+  passcode: localStorage.getItem(LS.passcode) || '',
+  user: localStorage.getItem(LS.user) || '',
+  entries: [],
+  users: [],
+  settings: { feedingIntervalMin: 180, pumpIntervalMin: 240 },
+};
 let active = loadActive();
-let entries = loadEntries();
 let pendingSave = null;
 let editingId = null;
 let tickHandle = null;
+let metricsHandle = null;
 
-// ----- Init -----
-render();
-if (active) startTick();
+// Try to hydrate from local cache (snappy first paint, even offline)
+try {
+  const cached = JSON.parse(localStorage.getItem(LS.cache) || 'null');
+  if (cached) {
+    if (Array.isArray(cached.entries)) state.entries = cached.entries;
+    if (Array.isArray(cached.users)) state.users = cached.users;
+    if (cached.settings && typeof cached.settings === 'object') {
+      Object.assign(state.settings, cached.settings);
+    }
+  }
+} catch {}
+
+// ----- Boot -----
+init();
+
+async function init() {
+  bindEvents();
+  render();
+
+  if (!state.apiUrl || !state.passcode) {
+    openSetup();
+    return;
+  }
+  try {
+    await bootstrap();
+  } catch (err) {
+    flashSync('Cannot reach sheet: ' + err.message, 'error');
+    return;
+  }
+  if (!state.user) {
+    openUserPicker();
+  }
+  if (active) startTick();
+  startMetricsTick();
+}
 
 // ----- Event wiring -----
-grid.addEventListener('click', (e) => {
-  const tile = e.target.closest('.tile');
-  if (!tile || tile.classList.contains('disabled')) return;
-  if (tile.classList.contains('is-active')) {
-    stopSession();
-  } else {
-    startSession(tile.dataset.action);
-  }
-});
-
-$('cancelSave').addEventListener('click', () => {
-  pendingSave = null;
-  hideModal(stopModal);
-});
-
-$('saveBtn').addEventListener('click', () => {
-  if (!pendingSave) return hideModal(stopModal);
-  const meta = TYPE_META[pendingSave.type];
-  const volume = parseInt($('volumeInput').value, 10);
-  const source = stopModal.querySelector('.seg-btn.active')?.dataset.source || null;
-
-  if (meta.needsVolume && (isNaN(volume) || volume < 0)) {
-    flashField($('volumeInput'));
-    return;
-  }
-  if (meta.needsSource && !source) {
-    flashField(stopModal.querySelector('.seg'));
-    return;
-  }
-
-  const entry = {
-    id: cryptoId(),
-    type: pendingSave.type,
-    start: pendingSave.start,
-    end: pendingSave.end,
-    volume: meta.needsVolume ? volume : null,
-    source: meta.needsSource ? source : null,
-    note: null,
-  };
-  entries.push(entry);
-  saveEntries();
-  pendingSave = null;
-  hideModal(stopModal);
-  render();
-});
-
-stopModal.querySelectorAll('[data-source]').forEach(b => {
-  b.addEventListener('click', () => {
-    stopModal.querySelectorAll('.seg-btn').forEach(x => x.classList.remove('active'));
-    b.classList.add('active');
-  });
-});
-
-editModal.querySelectorAll('[data-edit-source]').forEach(b => {
-  b.addEventListener('click', () => {
-    editModal.querySelectorAll('.seg-btn').forEach(x => x.classList.remove('active'));
-    b.classList.add('active');
-  });
-});
-
-$('cancelEdit').addEventListener('click', () => {
-  editingId = null;
-  hideModal(editModal);
-});
-$('saveEdit').addEventListener('click', () => {
-  if (!editingId) return;
-  const idx = entries.findIndex(e => e.id === editingId);
-  if (idx < 0) return;
-  const e = entries[idx];
-  const meta = TYPE_META[e.type];
-  const startMs = new Date($('editStart').value).getTime();
-  const endMs = new Date($('editEnd').value).getTime();
-  if (isNaN(startMs) || isNaN(endMs) || endMs < startMs) {
-    flashField($('editEnd'));
-    return;
-  }
-  e.start = startMs;
-  e.end = endMs;
-  if (meta.needsVolume) {
-    const v = parseInt($('editVolume').value, 10);
-    e.volume = isNaN(v) ? null : v;
-  }
-  if (meta.needsSource) {
-    e.source = editModal.querySelector('.seg-btn.active')?.dataset.editSource || e.source;
-  }
-  saveEntries();
-  editingId = null;
-  hideModal(editModal);
-  render();
-});
-$('deleteEntry').addEventListener('click', () => {
-  if (!editingId) return;
-  if (!confirm('Delete this entry?')) return;
-  entries = entries.filter(e => e.id !== editingId);
-  saveEntries();
-  editingId = null;
-  hideModal(editModal);
-  render();
-});
-
-$('clearAllBtn').addEventListener('click', () => {
-  if (!entries.length) return;
-  if (!confirm('Delete ALL entries? This cannot be undone.')) return;
-  entries = [];
-  saveEntries();
-  render();
-});
-
-$('exportBtn').addEventListener('click', exportData);
-
-// Close modal by tapping backdrop
-[stopModal, editModal].forEach(m => {
-  m.addEventListener('click', (e) => {
-    if (e.target === m) {
-      if (m === stopModal) pendingSave = null;
-      if (m === editModal) editingId = null;
-      hideModal(m);
+function bindEvents() {
+  // Tile click: start or stop
+  grid.addEventListener('click', (e) => {
+    const tile = e.target.closest('.tile');
+    if (!tile || tile.classList.contains('disabled')) return;
+    if (tile.classList.contains('is-active')) {
+      stopSession();
+    } else {
+      if (!ensureReady()) return;
+      startSession(tile.dataset.action);
     }
   });
-});
 
-// Keep timer correct when tab returns from background
-document.addEventListener('visibilitychange', () => {
-  if (!document.hidden && active) tickNow();
-});
+  // Setup
+  $('setupConnect').addEventListener('click', connectSetup);
+  $('setupPasscode').addEventListener('keydown', (e) => { if (e.key === 'Enter') connectSetup(); });
+  $('setupUrl').addEventListener('keydown', (e) => { if (e.key === 'Enter') connectSetup(); });
 
-// ----- Session control -----
+  // Header
+  $('settingsBtn').addEventListener('click', openSettings);
+  userChip.addEventListener('click', openUserPicker);
+
+  // User picker
+  $('addUserBtn').addEventListener('click', addNewUser);
+  $('newUserInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') addNewUser(); });
+  $('userCancelBtn').addEventListener('click', () => hideModal(userModal));
+  $('resetSetupBtn').addEventListener('click', () => {
+    if (!confirm('Disconnect this device? You will need to enter the URL and passcode again. Data in the sheet stays.')) return;
+    localStorage.removeItem(LS.apiUrl);
+    localStorage.removeItem(LS.passcode);
+    localStorage.removeItem(LS.user);
+    state.apiUrl = state.passcode = state.user = '';
+    hideModal(userModal);
+    openSetup();
+  });
+
+  // Settings
+  $('settingsCancel').addEventListener('click', () => hideModal(settingsModal));
+  $('settingsSave').addEventListener('click', saveSettings);
+  $('exportBtn').addEventListener('click', exportData);
+
+  // Stop modal (bottle/pump)
+  $('cancelSave').addEventListener('click', () => { pendingSave = null; hideModal(stopModal); });
+  $('saveBtn').addEventListener('click', confirmSave);
+  stopModal.querySelectorAll('[data-source]').forEach(b => {
+    b.addEventListener('click', () => {
+      stopModal.querySelectorAll('.seg-btn').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+    });
+  });
+
+  // Edit modal
+  editModal.querySelectorAll('[data-edit-source]').forEach(b => {
+    b.addEventListener('click', () => {
+      editModal.querySelectorAll('.seg-btn').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+    });
+  });
+  $('cancelEdit').addEventListener('click', () => { editingId = null; hideModal(editModal); });
+  $('saveEdit').addEventListener('click', confirmEdit);
+  $('deleteEntry').addEventListener('click', confirmDelete);
+
+  // Backdrop close
+  [stopModal, editModal, settingsModal, userModal].forEach(m => {
+    m.addEventListener('click', (e) => {
+      if (e.target === m) {
+        if (m === stopModal) pendingSave = null;
+        if (m === editModal) editingId = null;
+        hideModal(m);
+      }
+    });
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+      if (active) tickNow();
+      tickMetrics();
+      if (state.apiUrl && state.passcode) bootstrap().catch(() => {});
+    }
+  });
+}
+
+function ensureReady() {
+  if (!state.apiUrl || !state.passcode) { openSetup(); return false; }
+  if (!state.user) { openUserPicker(); return false; }
+  return true;
+}
+
+// ----- API client -----
+
+async function api(action, payload = {}) {
+  if (!state.apiUrl) throw new Error('Not configured');
+  const body = JSON.stringify({ action, passcode: state.passcode, user: state.user || null, ...payload });
+  const res = await fetch(state.apiUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // avoids CORS preflight
+    body,
+    redirect: 'follow',
+  });
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  let data;
+  try { data = await res.json(); }
+  catch { throw new Error('Bad response from server'); }
+  if (!data.ok) throw new Error(data.error || 'Server error');
+  return data;
+}
+
+async function bootstrap() {
+  const data = await api('bootstrap');
+  state.entries = data.entries || [];
+  state.users = data.users || [];
+  state.settings = Object.assign({ feedingIntervalMin: 180, pumpIntervalMin: 240 }, data.settings || {});
+  saveCache();
+  render();
+  return data;
+}
+
+function saveCache() {
+  localStorage.setItem(LS.cache, JSON.stringify({
+    entries: state.entries,
+    users: state.users,
+    settings: state.settings,
+  }));
+}
+
+// ----- Setup -----
+
+function openSetup() {
+  $('setupUrl').value = state.apiUrl || '';
+  $('setupPasscode').value = '';
+  hideError($('setupError'));
+  showModal(setupModal);
+  setTimeout(() => $('setupUrl').focus(), 100);
+}
+
+async function connectSetup() {
+  const url = $('setupUrl').value.trim();
+  const pass = $('setupPasscode').value.trim();
+  hideError($('setupError'));
+  if (!/^https:\/\/script\.google\.com\/macros\/s\/.+\/exec\b/.test(url)) {
+    return showError($('setupError'), 'URL should look like https://script.google.com/macros/s/.../exec');
+  }
+  if (!pass) {
+    return showError($('setupError'), 'Passcode required');
+  }
+  state.apiUrl = url;
+  state.passcode = pass;
+  try {
+    setBusy($('setupConnect'), true);
+    await api('bootstrap'); // validates passcode
+  } catch (err) {
+    setBusy($('setupConnect'), false);
+    state.apiUrl = state.passcode = '';
+    return showError($('setupError'), err.message);
+  }
+  setBusy($('setupConnect'), false);
+  localStorage.setItem(LS.apiUrl, state.apiUrl);
+  localStorage.setItem(LS.passcode, state.passcode);
+  hideModal(setupModal);
+  await bootstrap();
+  if (!state.user) openUserPicker();
+}
+
+// ----- User picker -----
+
+function openUserPicker() {
+  hideError($('userError'));
+  $('newUserInput').value = '';
+  renderUserList();
+  showModal(userModal);
+}
+
+function renderUserList() {
+  const list = $('userList');
+  list.innerHTML = '';
+  if (!state.users.length) {
+    list.innerHTML = '<p class="empty small">No users yet. Add one below.</p>';
+    return;
+  }
+  state.users.forEach(name => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'user-pick' + (name === state.user ? ' active' : '');
+    btn.innerHTML = `
+      <span class="user-avatar">${escapeHtml(name.charAt(0).toUpperCase())}</span>
+      <span class="user-name">${escapeHtml(name)}</span>
+    `;
+    btn.addEventListener('click', () => pickUser(name));
+    list.appendChild(btn);
+  });
+}
+
+function pickUser(name) {
+  state.user = name;
+  localStorage.setItem(LS.user, name);
+  hideModal(userModal);
+  render();
+}
+
+async function addNewUser() {
+  const name = $('newUserInput').value.trim();
+  hideError($('userError'));
+  if (!name) return;
+  try {
+    setBusy($('addUserBtn'), true);
+    const data = await api('add-user', { name });
+    state.users = data.users || [];
+    saveCache();
+    renderUserList();
+    pickUser(name);
+  } catch (err) {
+    showError($('userError'), err.message);
+  } finally {
+    setBusy($('addUserBtn'), false);
+  }
+}
+
+// ----- Settings -----
+
+function openSettings() {
+  if (!state.apiUrl || !state.passcode) return openSetup();
+  hideError($('settingsError'));
+  $('settingFeed').value = state.settings.feedingIntervalMin || '';
+  $('settingPump').value = state.settings.pumpIntervalMin || '';
+  showModal(settingsModal);
+}
+
+async function saveSettings() {
+  hideError($('settingsError'));
+  const feed = parseInt($('settingFeed').value, 10);
+  const pump = parseInt($('settingPump').value, 10);
+  if (isNaN(feed) || feed < 30) return showError($('settingsError'), 'Feeding interval must be ≥ 30');
+  if (isNaN(pump) || pump < 30) return showError($('settingsError'), 'Pump interval must be ≥ 30');
+  try {
+    setBusy($('settingsSave'), true);
+    const data = await api('update-settings', {
+      settings: { feedingIntervalMin: feed, pumpIntervalMin: pump },
+    });
+    state.settings = Object.assign(state.settings, data.settings || {});
+    saveCache();
+    hideModal(settingsModal);
+    render();
+  } catch (err) {
+    showError($('settingsError'), err.message);
+  } finally {
+    setBusy($('settingsSave'), false);
+  }
+}
+
+// ----- Sessions -----
+
 function startSession(type) {
   if (active) return;
   active = { type, start: Date.now() };
@@ -166,7 +339,7 @@ function startSession(type) {
   render();
 }
 
-function stopSession() {
+async function stopSession() {
   if (!active) return;
   const session = { ...active, end: Date.now() };
   active = null;
@@ -175,66 +348,88 @@ function stopSession() {
   render();
 
   const meta = TYPE_META[session.type];
-
-  // Breast feeds: nothing extra to ask, save immediately
   if (!meta.needsVolume && !meta.needsSource) {
-    entries.push({
-      id: cryptoId(),
+    // Breast: persist immediately, no modal
+    await persistEntry({
       type: session.type,
       start: session.start,
       end: session.end,
       volume: null,
       source: null,
-      note: null,
     });
-    saveEntries();
-    render();
     return;
   }
-
-  // Bottle / pump: open modal to capture mandatory extras
   pendingSave = session;
   openSaveModal(session);
 }
 
-function startTick() {
-  stopTick();
-  tickNow();
-  tickHandle = setInterval(tickNow, 1000);
+async function confirmSave() {
+  if (!pendingSave) return hideModal(stopModal);
+  const meta = TYPE_META[pendingSave.type];
+  const volume = parseInt($('volumeInput').value, 10);
+  const source = stopModal.querySelector('.seg-btn.active')?.dataset.source || null;
+  if (meta.needsVolume && (isNaN(volume) || volume < 0)) return flashField($('volumeInput'));
+  if (meta.needsSource && !source) return flashField(stopModal.querySelector('.seg'));
+
+  const entry = {
+    type: pendingSave.type,
+    start: pendingSave.start,
+    end: pendingSave.end,
+    volume: meta.needsVolume ? volume : null,
+    source: meta.needsSource ? source : null,
+  };
+  pendingSave = null;
+  hideModal(stopModal);
+  await persistEntry(entry);
 }
-function stopTick() {
-  if (tickHandle) { clearInterval(tickHandle); tickHandle = null; }
+
+async function persistEntry(entry) {
+  // Optimistic local insert with a temp id
+  const tempId = 'tmp-' + cryptoId();
+  const now = new Date().toISOString();
+  const optimistic = {
+    id: tempId,
+    type: entry.type,
+    start: entry.start,
+    end: entry.end,
+    volume: entry.volume,
+    source: entry.source,
+    user: state.user,
+    createdAt: now,
+    updatedAt: now,
+    pending: true,
+  };
+  state.entries.push(optimistic);
+  saveCache();
+  render();
+
+  try {
+    const data = await api('add-entry', { entry });
+    const saved = data.entry;
+    const idx = state.entries.findIndex(e => e.id === tempId);
+    if (idx >= 0) state.entries[idx] = saved;
+    saveCache();
+    render();
+    flashSync('Saved', 'ok');
+  } catch (err) {
+    flashSync('Could not sync: ' + err.message + ' (kept locally)', 'error');
+  }
 }
+
+function startTick() { stopTick(); tickNow(); tickHandle = setInterval(tickNow, 1000); }
+function stopTick() { if (tickHandle) { clearInterval(tickHandle); tickHandle = null; } }
 function tickNow() {
   if (!active) return;
   const elapsed = Date.now() - active.start;
   const text = formatDuration(elapsed);
   const tile = grid.querySelector(`.tile[data-action="${active.type}"]`);
-  if (tile) {
-    const t = tile.querySelector('.live-timer');
-    if (t) t.textContent = text;
-  }
+  if (tile) tile.querySelector('.live-timer').textContent = text;
 }
 
-// ----- Modals -----
-function openSaveModal(session) {
-  const meta = TYPE_META[session.type];
-  $('modalTitle').textContent = `Save ${meta.title.toLowerCase()}`;
-  const dur = formatDuration(session.end - session.start);
-  $('modalSub').textContent = `${dur} · ${formatTimeRange(session.start, session.end)}`;
-
-  $('sourceField').classList.toggle('hidden', !meta.needsSource);
-  $('volumeField').classList.toggle('hidden', !meta.needsVolume);
-
-  $('volumeInput').value = '';
-  stopModal.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
-
-  showModal(stopModal);
-  if (meta.needsVolume) setTimeout(() => $('volumeInput').focus(), 200);
-}
+// ----- Edit modal -----
 
 function openEditModal(id) {
-  const e = entries.find(x => x.id === id);
+  const e = state.entries.find(x => x.id === id);
   if (!e) return;
   editingId = id;
   const meta = TYPE_META[e.type];
@@ -251,47 +446,131 @@ function openEditModal(id) {
   showModal(editModal);
 }
 
+async function confirmEdit() {
+  if (!editingId) return;
+  const idx = state.entries.findIndex(x => x.id === editingId);
+  if (idx < 0) return;
+  const e = state.entries[idx];
+  const meta = TYPE_META[e.type];
+  const startMs = new Date($('editStart').value).getTime();
+  const endMs = new Date($('editEnd').value).getTime();
+  if (isNaN(startMs) || isNaN(endMs) || endMs < startMs) return flashField($('editEnd'));
+
+  const next = {
+    ...e,
+    start: startMs,
+    end: endMs,
+    volume: meta.needsVolume ? (parseInt($('editVolume').value, 10) || null) : null,
+    source: meta.needsSource ? (editModal.querySelector('.seg-btn.active')?.dataset.editSource || e.source) : null,
+  };
+  state.entries[idx] = { ...next, pending: true };
+  saveCache();
+  hideModal(editModal);
+  render();
+
+  try {
+    const data = await api('update-entry', { entry: next });
+    const saved = data.entry;
+    const i2 = state.entries.findIndex(x => x.id === saved.id);
+    if (i2 >= 0) state.entries[i2] = saved;
+    saveCache();
+    render();
+    flashSync('Updated', 'ok');
+  } catch (err) {
+    flashSync('Could not sync edit: ' + err.message, 'error');
+  } finally {
+    editingId = null;
+  }
+}
+
+async function confirmDelete() {
+  if (!editingId) return;
+  if (!confirm('Delete this entry?')) return;
+  const id = editingId;
+  state.entries = state.entries.filter(e => e.id !== id);
+  saveCache();
+  hideModal(editModal);
+  editingId = null;
+  render();
+  try {
+    await api('delete-entry', { id });
+    flashSync('Deleted', 'ok');
+  } catch (err) {
+    flashSync('Could not sync delete: ' + err.message, 'error');
+  }
+}
+
+// ----- Modals helpers -----
+
+function openSaveModal(session) {
+  const meta = TYPE_META[session.type];
+  $('modalTitle').textContent = `Save ${meta.title.toLowerCase()}`;
+  const dur = formatDuration(session.end - session.start);
+  $('modalSub').textContent = `${dur} · ${formatTimeRange(session.start, session.end)}`;
+  $('sourceField').classList.toggle('hidden', !meta.needsSource);
+  $('volumeField').classList.toggle('hidden', !meta.needsVolume);
+  $('volumeInput').value = '';
+  stopModal.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
+  showModal(stopModal);
+  if (meta.needsVolume) setTimeout(() => $('volumeInput').focus(), 200);
+}
+
 function showModal(m) { m.classList.remove('hidden'); }
 function hideModal(m) { m.classList.add('hidden'); }
-
+function showError(el, msg) { el.textContent = msg; el.classList.remove('hidden'); }
+function hideError(el) { el.classList.add('hidden'); el.textContent = ''; }
+function setBusy(btn, busy) {
+  btn.disabled = busy;
+  btn.classList.toggle('busy', busy);
+}
 function flashField(el) {
-  el.style.transition = 'box-shadow 0.2s';
   el.style.boxShadow = '0 0 0 3px rgba(217, 83, 107, 0.3)';
   setTimeout(() => { el.style.boxShadow = ''; }, 600);
 }
+function flashSync(msg, kind) {
+  syncBanner.textContent = msg;
+  syncBanner.className = 'sync-banner ' + (kind || 'ok');
+  syncBanner.classList.remove('hidden');
+  clearTimeout(flashSync._t);
+  flashSync._t = setTimeout(() => syncBanner.classList.add('hidden'), 2400);
+}
 
 // ----- Render -----
+
 function render() {
+  // Header user chip
+  if (state.user) {
+    userChip.classList.remove('hidden');
+    $('userChipName').textContent = state.user;
+    $('userChipAvatar').textContent = state.user.charAt(0).toUpperCase();
+  } else {
+    userChip.classList.add('hidden');
+  }
+
+  // Tile state
   grid.querySelectorAll('.tile').forEach(t => {
     t.classList.remove('is-active', 'disabled');
-    const timer = t.querySelector('.live-timer');
-    if (timer) timer.textContent = '00:00';
+    const tm = t.querySelector('.live-timer');
+    if (tm) tm.textContent = '00:00';
   });
-
   if (active) {
     grid.querySelectorAll('.tile').forEach(t => {
-      if (t.dataset.action === active.type) {
-        t.classList.add('is-active');
-      } else {
-        t.classList.add('disabled');
-      }
+      if (t.dataset.action === active.type) t.classList.add('is-active');
+      else t.classList.add('disabled');
     });
     tickNow();
   }
 
   renderEntries();
-  renderStats();
+  tickMetrics();
 }
 
 function renderEntries() {
   entriesEl.innerHTML = '';
-  if (!entries.length) {
-    emptyState.classList.remove('hidden');
-    return;
-  }
+  if (!state.entries.length) { emptyState.classList.remove('hidden'); return; }
   emptyState.classList.add('hidden');
 
-  const sorted = [...entries].sort((a, b) => b.start - a.start);
+  const sorted = [...state.entries].sort((a, b) => (b.start || 0) - (a.start || 0));
   let lastDay = null;
   for (const e of sorted) {
     const day = dayKey(e.start);
@@ -307,32 +586,33 @@ function renderEntries() {
 }
 
 function renderEntry(e) {
-  const meta = TYPE_META[e.type];
+  const meta = TYPE_META[e.type] || { short: e.type };
   const li = document.createElement('li');
-  li.className = 'entry';
+  li.className = 'entry' + (e.pending ? ' pending' : '');
   li.tabIndex = 0;
   li.addEventListener('click', () => openEditModal(e.id));
 
   const icon = document.createElement('div');
   icon.className = `entry-icon ${e.type}`;
-  icon.innerHTML = iconSvg(e.type);
+  icon.innerHTML = entryIconSvg(e.type);
 
   const main = document.createElement('div');
   main.className = 'entry-main';
   const title = document.createElement('div');
   title.className = 'entry-title';
   let titleText = meta.short;
-  if (e.type === 'bottle' && e.source) {
-    titleText += ` · ${e.source === 'own' ? 'Own milk' : 'Formula'}`;
-  }
+  if (e.type === 'bottle' && e.source) titleText += ` · ${e.source === 'own' ? 'Own milk' : 'Formula'}`;
   title.textContent = titleText;
 
   const metaRow = document.createElement('div');
   metaRow.className = 'entry-meta';
+  const dur = (e.start && e.end) ? formatDuration(e.end - e.start) : '—';
   metaRow.innerHTML = `
     <span>${formatTimeRange(e.start, e.end)}</span>
     <span class="dot">•</span>
-    <span>${formatDuration(e.end - e.start)}</span>
+    <span>${dur}</span>
+    ${e.user ? `<span class="dot">•</span><span>${escapeHtml(e.user)}</span>` : ''}
+    ${e.pending ? `<span class="dot">•</span><span class="pending-mark">syncing…</span>` : ''}
   `;
   main.append(title, metaRow);
 
@@ -348,39 +628,69 @@ function renderEntry(e) {
   return li;
 }
 
-function renderStats() {
-  const today = new Date(); today.setHours(0,0,0,0);
-  const todayStart = today.getTime();
-  let breastMs = 0;
-  let intakeMl = 0;
-  let last = null;
-  for (const e of entries) {
-    if (!last || e.start > last.start) last = e;
-    if (e.start >= todayStart) {
-      if (e.type === 'left' || e.type === 'right') breastMs += (e.end - e.start);
-      if (e.type === 'bottle' && e.volume) intakeMl += e.volume;
+// ----- Top metrics -----
+
+function startMetricsTick() {
+  if (metricsHandle) clearInterval(metricsHandle);
+  metricsHandle = setInterval(tickMetrics, 30 * 1000);
+}
+
+function tickMetrics() {
+  // Last feeding (breast or bottle)
+  const feeds = state.entries.filter(e => TYPE_META[e.type]?.isFeed && e.end);
+  feeds.sort((a, b) => (b.end || 0) - (a.end || 0));
+  const last = feeds[0];
+
+  if (last) {
+    $('statLast').textContent = relativeTime(last.end);
+    const intervalMin = Number(state.settings.feedingIntervalMin) || 180;
+    const dueAt = (last.end || 0) + intervalMin * 60 * 1000;
+    const diff = dueAt - Date.now();
+    const nextEl = $('statNext');
+    if (diff > 0) {
+      nextEl.textContent = 'in ' + formatRel(diff);
+      nextEl.classList.remove('overdue');
+    } else {
+      nextEl.textContent = 'overdue ' + formatRel(-diff);
+      nextEl.classList.add('overdue');
+    }
+  } else {
+    $('statLast').textContent = '—';
+    $('statNext').textContent = '—';
+    $('statNext').classList.remove('overdue');
+  }
+
+  // Today summary
+  const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
+  let count = 0, ml = 0;
+  for (const e of state.entries) {
+    if (!TYPE_META[e.type]?.isFeed) continue;
+    if ((e.start || 0) >= todayStart.getTime()) {
+      count++;
+      if (e.type === 'bottle' && e.volume) ml += e.volume;
     }
   }
-  $('statLast').textContent = last ? `${TYPE_META[last.type].short} · ${relativeTime(last.start)}` : '—';
-  $('statBreast').textContent = `${Math.round(breastMs / 60000)} min`;
-  $('statIntake').textContent = `${intakeMl} ml`;
+  $('statToday').textContent = `${count}× · ${ml} ml`;
+}
+
+function formatRel(ms) {
+  if (ms < 0) ms = -ms;
+  const m = Math.round(ms / 60000);
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  const rem = m % 60;
+  return rem ? `${h}h ${rem}m` : `${h}h`;
 }
 
 // ----- Utils -----
-function loadEntries() {
-  try { return JSON.parse(localStorage.getItem(STORE.entries)) || []; }
-  catch { return []; }
-}
-function saveEntries() {
-  localStorage.setItem(STORE.entries, JSON.stringify(entries));
-}
+
 function loadActive() {
-  try { return JSON.parse(localStorage.getItem(STORE.active)); }
+  try { return JSON.parse(localStorage.getItem(LS.active)); }
   catch { return null; }
 }
 function saveActive() {
-  if (active) localStorage.setItem(STORE.active, JSON.stringify(active));
-  else localStorage.removeItem(STORE.active);
+  if (active) localStorage.setItem(LS.active, JSON.stringify(active));
+  else localStorage.removeItem(LS.active);
 }
 
 function cryptoId() {
@@ -389,7 +699,7 @@ function cryptoId() {
 }
 
 function formatDuration(ms) {
-  if (ms < 0) ms = 0;
+  if (!ms || ms < 0) ms = 0;
   const totalSec = Math.floor(ms / 1000);
   const h = Math.floor(totalSec / 3600);
   const m = Math.floor((totalSec % 3600) / 60);
@@ -400,18 +710,18 @@ function formatDuration(ms) {
 function pad(n) { return n.toString().padStart(2, '0'); }
 
 function formatClock(ts) {
+  if (!ts) return '—';
   return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
-function formatTimeRange(a, b) {
-  return `${formatClock(a)} – ${formatClock(b)}`;
-}
+function formatTimeRange(a, b) { return `${formatClock(a)} – ${formatClock(b)}`; }
 
 function dayKey(ts) {
+  if (!ts) return '0';
   const d = new Date(ts);
   return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 }
 function formatDayLabel(ts) {
-  const d = new Date(ts);
+  const d = new Date(ts || Date.now());
   const today = new Date(); today.setHours(0,0,0,0);
   const yest = new Date(today.getTime() - 86400000);
   const startOf = new Date(d); startOf.setHours(0,0,0,0);
@@ -421,17 +731,20 @@ function formatDayLabel(ts) {
 }
 
 function relativeTime(ts) {
+  if (!ts) return '—';
   const diff = Date.now() - ts;
   const m = Math.round(diff / 60000);
   if (m < 1) return 'just now';
-  if (m < 60) return `${m} min ago`;
+  if (m < 60) return `${m}m ago`;
   const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
+  const rem = m % 60;
+  if (h < 24) return rem ? `${h}h ${rem}m ago` : `${h}h ago`;
   const d = Math.floor(h / 24);
   return `${d}d ago`;
 }
 
 function toLocalDatetime(ts) {
+  if (!ts) return '';
   const d = new Date(ts);
   const off = d.getTimezoneOffset();
   const local = new Date(ts - off * 60000);
@@ -439,28 +752,29 @@ function toLocalDatetime(ts) {
 }
 
 function escapeHtml(s) {
-  return s.replace(/[&<>"']/g, c => ({
+  return String(s).replace(/[&<>"']/g, c => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
   }[c]));
 }
 
-function iconSvg(type) {
-  const stroke = 'currentColor';
+function entryIconSvg(type) {
   if (type === 'left' || type === 'right') {
     const cx = type === 'left' ? 9 : 15;
-    return `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="${stroke}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="${cx}" cy="12" r="7"/><circle cx="${cx}" cy="12" r="1.6" fill="${stroke}"/></svg>`;
+    return `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="${cx}" cy="12" r="7"/><circle cx="${cx}" cy="12" r="1.6" fill="currentColor"/></svg>`;
   }
   if (type === 'bottle') {
-    return `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="${stroke}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6M10 3v2M14 3v2M8 7h8l-1 14a2 2 0 0 1-2 2h-2a2 2 0 0 1-2-2z"/><line x1="9" y1="13" x2="15" y2="13"/></svg>`;
+    return `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6M10 3v2M14 3v2M8 7h8l-1 14a2 2 0 0 1-2 2h-2a2 2 0 0 1-2-2z"/><line x1="9" y1="13" x2="15" y2="13"/></svg>`;
   }
-  return `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="${stroke}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="7" width="10" height="11" rx="2"/><path d="M14 10h4a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2h-4"/><line x1="7" y1="7" x2="7" y2="5"/><line x1="11" y1="7" x2="11" y2="5"/></svg>`;
+  return `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="7" width="10" height="11" rx="2"/><path d="M14 10h4a2 2 0 0 1 2 2v2a2 2 0 0 1-2 2h-4"/><line x1="7" y1="7" x2="7" y2="5"/><line x1="11" y1="7" x2="11" y2="5"/></svg>`;
 }
 
 function exportData() {
   const data = {
     exportedAt: new Date().toISOString(),
-    entries,
-    active,
+    user: state.user,
+    entries: state.entries,
+    settings: state.settings,
+    users: state.users,
   };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
