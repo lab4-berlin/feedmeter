@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23f7c8d4'/%3E%3Ccircle cx='32' cy='28' r='10' fill='%23fff'/%3E%3Crect x='28' y='34' width='8' height='18' rx='4' fill='%23fff'/%3E%3C/svg%3E" />
   <link rel="apple-touch-icon" href="icon-180.png" />
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="styles.css?v=3" />
 </head>
 <body>
   <header class="app-header">
@@ -56,35 +56,33 @@
     <!-- 4 big action buttons -->
     <section class="grid" id="actionGrid" aria-label="Start a new session">
       <button class="tile tile-left" data-action="left" aria-label="Left breast">
-        <svg class="tile-svg" viewBox="0 0 120 80" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <circle cx="40" cy="40" r="26" fill="currentColor"/>
-          <circle cx="40" cy="40" r="6" fill="#fff"/>
-          <circle cx="80" cy="40" r="26" opacity="0.28"/>
-        </svg>
+        <span class="tile-letter">L</span>
+        <span class="tile-name">Breast</span>
       </button>
 
       <button class="tile tile-right" data-action="right" aria-label="Right breast">
-        <svg class="tile-svg" viewBox="0 0 120 80" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <circle cx="40" cy="40" r="26" opacity="0.28"/>
-          <circle cx="80" cy="40" r="26" fill="currentColor"/>
-          <circle cx="80" cy="40" r="6" fill="#fff"/>
-        </svg>
+        <span class="tile-letter">R</span>
+        <span class="tile-name">Breast</span>
       </button>
 
       <button class="tile tile-bottle" data-action="bottle" aria-label="Bottle">
-        <svg class="tile-svg" viewBox="0 0 80 80" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <path d="M30 10h20M32 10v6M48 10v6M26 22h28l-3 44a6 6 0 0 1-6 6h-10a6 6 0 0 1-6-6z"/>
-          <line x1="28" y1="40" x2="52" y2="40"/>
+        <svg class="tile-svg" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M26 8h12"/>
+          <path d="M24 14h16"/>
+          <path d="M22 20h20l-1.5 30a4 4 0 0 1-4 3.8h-9a4 4 0 0 1-4-3.8z"/>
+          <path d="M26 36h12" opacity="0.5"/>
         </svg>
+        <span class="tile-name">Bottle</span>
       </button>
 
       <button class="tile tile-pump" data-action="pump" aria-label="Pump">
-        <svg class="tile-svg" viewBox="0 0 80 80" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <rect x="12" y="22" width="34" height="40" rx="5"/>
-          <path d="M46 32h14a6 6 0 0 1 6 6v8a6 6 0 0 1-6 6H46"/>
-          <line x1="22" y1="22" x2="22" y2="14"/>
-          <line x1="36" y1="22" x2="36" y2="14"/>
+        <svg class="tile-svg" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 28c0-8 5-14 13-14s13 6 13 14"/>
+          <path d="M14 28h22v6a4 4 0 0 1-4 4H18a4 4 0 0 1-4-4z"/>
+          <path d="M38 31h6a4 4 0 0 1 4 4v6a4 4 0 0 1-4 4h-6"/>
+          <path d="M22 38v8a4 4 0 0 0 4 4h2a4 4 0 0 0 4-4v-8" opacity="0.5"/>
         </svg>
+        <span class="tile-name">Pump</span>
       </button>
     </section>
 
@@ -172,6 +170,6 @@
     </div>
   </div>
 
-  <script src="app.js"></script>
+  <script src="app.js?v=3"></script>
 </body>
 </html>

@@ -142,43 +142,58 @@ body {
 
 .tile {
   position: relative;
-  display: grid;
-  place-items: center;
-  padding: 20px;
-  min-height: 160px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 20px 14px 16px;
+  min-height: 130px;
   border-radius: var(--radius);
   border: 1px solid transparent;
-  background: var(--tile-bg, var(--surface));
-  color: var(--tile-ink, var(--plum));
-  box-shadow: var(--shadow);
   cursor: pointer;
-  transition: transform 0.08s ease, box-shadow 0.2s ease, filter 0.2s ease;
+  transition: transform 0.08s ease, filter 0.2s ease;
   overflow: hidden;
   -webkit-tap-highlight-color: transparent;
 }
 .tile:active { transform: scale(0.97); }
 
 .tile-svg {
-  width: 88%;
-  max-width: 140px;
-  height: auto;
+  width: 56px;
+  height: 56px;
   display: block;
 }
 
-.tile-left,
-.tile-right {
-  --tile-bg: #ece1f6;
-  --tile-ink: #7a55a8;
-  --tile-border: #ddccef;
-}
-.tile-bottle,
-.tile-pump {
-  --tile-bg: #fbeec0;
-  --tile-ink: #a87523;
-  --tile-border: #f1de9a;
+.tile-letter {
+  font-size: 56px;
+  font-weight: 300;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", system-ui, sans-serif;
 }
 
-.tile { border-color: var(--tile-border); }
+.tile-name {
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  opacity: 0.75;
+}
+
+/* Lilac for breasts */
+.tile-left,
+.tile-right {
+  background: #e9def6;
+  color: #6f4aa3;
+  border-color: #d8c6ec;
+}
+
+/* Light yellow for bottle and pump */
+.tile-bottle,
+.tile-pump {
+  background: #fbeab0;
+  color: #936518;
+  border-color: #f0d987;
+}
 
 .tile.disabled {
   opacity: 0.4;
