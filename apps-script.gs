@@ -12,7 +12,6 @@
  *      keys:
  *        passcode               (string, default "changeme" — change it!)
  *        feedingIntervalMin     (number, default 180)
- *        pumpIntervalMin        (number, default 240)
  *        user                   (repeated; one row per known user name)
  */
 
@@ -103,7 +102,6 @@ function ensureInit_() {
     const defaults = [
       ['passcode', 'changeme'],
       ['feedingIntervalMin', 180],
-      ['pumpIntervalMin', 240],
       ['user', 'Mama'],
       ['user', 'Papa'],
     ];

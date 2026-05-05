@@ -35,7 +35,7 @@ let state = {
   user: localStorage.getItem(LS.user) || '',
   entries: [],
   users: [],
-  settings: { feedingIntervalMin: 180, pumpIntervalMin: 240 },
+  settings: { feedingIntervalMin: 180 },
   historyDate: null, // YYYY-MM-DD or null = today (live)
 };
 let active = loadActive();
@@ -205,7 +205,7 @@ async function bootstrap() {
   const data = await api('bootstrap');
   state.entries = data.entries || [];
   state.users = data.users || [];
-  state.settings = Object.assign({ feedingIntervalMin: 180, pumpIntervalMin: 240 }, data.settings || {});
+  state.settings = Object.assign({ feedingIntervalMin: 180 }, data.settings || {});
   saveCache();
   render();
   return data;
@@ -383,20 +383,17 @@ function openSettings() {
   if (!state.apiUrl || !state.passcode) return openSetup();
   hideError($('settingsError'));
   $('settingFeed').value = state.settings.feedingIntervalMin || '';
-  $('settingPump').value = state.settings.pumpIntervalMin || '';
   showModal(settingsModal);
 }
 
 async function saveSettings() {
   hideError($('settingsError'));
   const feed = parseInt($('settingFeed').value, 10);
-  const pump = parseInt($('settingPump').value, 10);
   if (isNaN(feed) || feed < 30) return showError($('settingsError'), 'Feeding interval must be ≥ 30');
-  if (isNaN(pump) || pump < 30) return showError($('settingsError'), 'Pump interval must be ≥ 30');
   try {
     setBusy($('settingsSave'), true);
     const data = await api('update-settings', {
-      settings: { feedingIntervalMin: feed, pumpIntervalMin: pump },
+      settings: { feedingIntervalMin: feed },
     });
     state.settings = Object.assign(state.settings, data.settings || {});
     saveCache();
@@ -779,16 +776,19 @@ function startMetricsTick() {
 }
 
 function tickMetrics() {
-  // Last feeding (breast or bottle)
+  const now = Date.now();
+  const todayStart = (() => { const d = new Date(); d.setHours(0,0,0,0); return d.getTime(); })();
+
+  // ----- Feeding (breast or bottle) -----
   const feeds = state.entries.filter(e => TYPE_META[e.type]?.isFeed && e.end);
   feeds.sort((a, b) => (b.end || 0) - (a.end || 0));
-  const last = feeds[0];
+  const lastFeed = feeds[0];
 
-  if (last) {
-    $('statLast').textContent = relativeTime(last.end);
+  if (lastFeed) {
+    $('statLast').textContent = relativeTime(lastFeed.end);
     const intervalMin = Number(state.settings.feedingIntervalMin) || 180;
-    const dueAt = (last.end || 0) + intervalMin * 60 * 1000;
-    const diff = dueAt - Date.now();
+    const dueAt = (lastFeed.end || 0) + intervalMin * 60 * 1000;
+    const diff = dueAt - now;
     const nextEl = $('statNext');
     if (diff > 0) {
       nextEl.textContent = 'in ' + formatRel(diff);
@@ -803,17 +803,31 @@ function tickMetrics() {
     $('statNext').classList.remove('overdue');
   }
 
-  // Today summary
-  const todayStart = new Date(); todayStart.setHours(0, 0, 0, 0);
-  let count = 0, ml = 0;
+  let feedCount = 0, feedMl = 0;
   for (const e of state.entries) {
     if (!TYPE_META[e.type]?.isFeed) continue;
-    if ((e.start || 0) >= todayStart.getTime()) {
-      count++;
-      if (e.type === 'bottle' && e.volume) ml += e.volume;
+    if ((e.start || 0) >= todayStart) {
+      feedCount++;
+      if (e.type === 'bottle' && e.volume) feedMl += e.volume;
     }
   }
-  $('statToday').textContent = `${count}× · ${ml} ml`;
+  $('statTodayFeed').textContent = `${feedCount}× · ${feedMl} ml`;
+
+  // ----- Pumping -----
+  const pumps = state.entries.filter(e => e.type === 'pump' && e.end);
+  pumps.sort((a, b) => (b.end || 0) - (a.end || 0));
+  const lastPump = pumps[0];
+  $('statLastPump').textContent = lastPump ? relativeTime(lastPump.end) : '—';
+
+  let pumpCount = 0, pumpMl = 0;
+  for (const e of state.entries) {
+    if (e.type !== 'pump') continue;
+    if ((e.start || 0) >= todayStart) {
+      pumpCount++;
+      if (e.volume) pumpMl += e.volume;
+    }
+  }
+  $('statTodayPump').textContent = `${pumpCount}× · ${pumpMl} ml`;
 }
 
 function formatRel(ms) {

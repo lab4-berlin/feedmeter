@@ -288,10 +288,12 @@ body {
 /* Stats */
 .stats {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
   gap: 8px;
-  margin: 4px 0 18px;
+  margin: 4px 0 8px;
 }
+.stats.cols-2 { grid-template-columns: repeat(2, 1fr); }
+.stats.cols-3 { grid-template-columns: repeat(3, 1fr); }
+.stats:last-of-type { margin-bottom: 18px; }
 .stat {
   background: var(--surface);
   border: 1px solid var(--line);

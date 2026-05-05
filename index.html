@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23f7c8d4'/%3E%3Ccircle cx='32' cy='28' r='10' fill='%23fff'/%3E%3Crect x='28' y='34' width='8' height='18' rx='4' fill='%23fff'/%3E%3C/svg%3E" />
   <link rel="apple-touch-icon" href="icon-192.svg" />
-  <link rel="stylesheet" href="styles.css?v=9" />
+  <link rel="stylesheet" href="styles.css?v=10" />
 </head>
 <body>
   <header class="app-header">
@@ -34,8 +34,8 @@
   <div class="sync-banner hidden" id="syncBanner" role="status"></div>
 
   <main class="container" id="appMain">
-    <!-- Top metrics -->
-    <section class="stats" id="stats">
+    <!-- Top metrics: feeding -->
+    <section class="stats cols-3">
       <div class="stat">
         <span class="stat-label">Last feeding</span>
         <span class="stat-value" id="statLast">—</span>
@@ -45,8 +45,19 @@
         <span class="stat-value" id="statNext">—</span>
       </div>
       <div class="stat">
-        <span class="stat-label">Today</span>
-        <span class="stat-value" id="statToday">—</span>
+        <span class="stat-label">Feeds today</span>
+        <span class="stat-value" id="statTodayFeed">—</span>
+      </div>
+    </section>
+    <!-- Top metrics: pumping -->
+    <section class="stats cols-2">
+      <div class="stat">
+        <span class="stat-label">Last pumping</span>
+        <span class="stat-value" id="statLastPump">—</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Pumped today</span>
+        <span class="stat-value" id="statTodayPump">—</span>
       </div>
     </section>
 
@@ -228,10 +239,6 @@
         <input id="settingFeed" type="number" inputmode="numeric" min="30" max="600" step="5" />
         <p class="field-hint">Used for the "next feeding due" countdown. Newborns: 120–180.</p>
       </div>
-      <div class="field">
-        <label for="settingPump">Pump interval (minutes)</label>
-        <input id="settingPump" type="number" inputmode="numeric" min="30" max="720" step="5" />
-      </div>
 
       <div class="modal-error hidden" id="settingsError"></div>
 
@@ -308,6 +315,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=9"></script>
+  <script src="app.js?v=10"></script>
 </body>
 </html>

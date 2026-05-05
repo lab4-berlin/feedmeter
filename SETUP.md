@@ -51,7 +51,6 @@ While you're there you can also tweak:
 |-----|---------|---------------|
 | `passcode` | `changeme` | shared family passcode |
 | `feedingIntervalMin` | `180` | minutes between feedings (used for the "next feeding due" countdown) |
-| `pumpIntervalMin` | `240` | minutes between pumping sessions |
 | `user` (rows) | `Mama`, `Papa` | the predefined people who can log entries — add as many `user` rows as you like |
 
 You can edit these in the sheet at any time, or from the in-app settings panel later.
