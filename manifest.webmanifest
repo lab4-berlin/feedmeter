@@ -1,0 +1,25 @@
+{
+  "name": "FeedMeter",
+  "short_name": "FeedMeter",
+  "description": "Simple feeding tracker for breastfeeding, bottle and pumping.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#fbf6f7",
+  "theme_color": "#fbeef1",
+  "icons": [
+    {
+      "src": "icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
