@@ -89,49 +89,6 @@ body {
   padding: 4px 16px 32px;
 }
 
-/* Live timer card */
-.live-card {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 14px 16px;
-  background: linear-gradient(135deg, #fff, var(--surface-2));
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  margin: 8px 0 16px;
-}
-.live-info { display: flex; flex-direction: column; gap: 2px; }
-.live-type {
-  font-size: 13px;
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  font-weight: 600;
-}
-.live-time {
-  font-variant-numeric: tabular-nums;
-  font-size: 28px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-}
-
-.stop-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 18px;
-  border: 0;
-  border-radius: 14px;
-  background: var(--rose);
-  color: white;
-  font-size: 16px;
-  font-weight: 600;
-  cursor: pointer;
-  box-shadow: 0 6px 16px rgba(229, 127, 153, 0.4);
-}
-.stop-btn:active { transform: scale(0.97); }
-
 /* 4 tiles */
 .grid {
   display: grid;
@@ -142,21 +99,47 @@ body {
 
 .tile {
   position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
+  display: grid;
+  place-items: center;
   padding: 20px 14px 16px;
   min-height: 130px;
   border-radius: var(--radius);
   border: 1px solid transparent;
   cursor: pointer;
-  transition: transform 0.08s ease, filter 0.2s ease;
+  transition: transform 0.08s ease, filter 0.2s ease, box-shadow 0.2s ease;
   overflow: hidden;
   -webkit-tap-highlight-color: transparent;
 }
 .tile:active { transform: scale(0.97); }
+
+.tile-content,
+.tile-live {
+  grid-area: 1 / 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  height: 100%;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.tile-live {
+  opacity: 0;
+  transform: scale(0.92);
+  pointer-events: none;
+  gap: 4px;
+}
+
+.tile.is-active .tile-content {
+  opacity: 0;
+  transform: scale(0.92);
+}
+.tile.is-active .tile-live {
+  opacity: 1;
+  transform: scale(1);
+}
 
 .tile-svg {
   width: 56px;
@@ -177,6 +160,51 @@ body {
   font-weight: 500;
   letter-spacing: 0.02em;
   opacity: 0.75;
+}
+
+/* Live state inside tile */
+.live-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  color: #d9536b;
+  text-transform: uppercase;
+}
+.live-badge .pulse {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #d9536b;
+  box-shadow: 0 0 0 0 rgba(217, 83, 107, 0.55);
+  animation: live-pulse 1.4s ease-out infinite;
+}
+@keyframes live-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(217, 83, 107, 0.55); }
+  70%  { box-shadow: 0 0 0 10px rgba(217, 83, 107, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(217, 83, 107, 0); }
+}
+
+.live-timer {
+  font-size: 38px;
+  font-weight: 600;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.live-hint {
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  opacity: 0.65;
+  text-transform: uppercase;
+}
+
+.tile.is-active {
+  box-shadow: 0 0 0 2px currentColor inset, var(--shadow);
 }
 
 /* Lilac for breasts */

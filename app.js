@@ -13,10 +13,6 @@ const TYPE_META = {
 
 // ----- DOM -----
 const $ = (id) => document.getElementById(id);
-const liveCard = $('liveCard');
-const liveType = $('liveType');
-const liveTimeEl = $('liveTime');
-const stopBtn = $('stopBtn');
 const grid = $('actionGrid');
 const entriesEl = $('entries');
 const emptyState = $('emptyState');
@@ -38,10 +34,12 @@ if (active) startTick();
 grid.addEventListener('click', (e) => {
   const tile = e.target.closest('.tile');
   if (!tile || tile.classList.contains('disabled')) return;
-  startSession(tile.dataset.action);
+  if (tile.classList.contains('is-active')) {
+    stopSession();
+  } else {
+    startSession(tile.dataset.action);
+  }
 });
-
-stopBtn.addEventListener('click', stopSession);
 
 $('cancelSave').addEventListener('click', () => {
   pendingSave = null;
@@ -194,7 +192,12 @@ function stopTick() {
 function tickNow() {
   if (!active) return;
   const elapsed = Date.now() - active.start;
-  liveTimeEl.textContent = formatDuration(elapsed);
+  const text = formatDuration(elapsed);
+  const tile = grid.querySelector(`.tile[data-action="${active.type}"]`);
+  if (tile) {
+    const t = tile.querySelector('.live-timer');
+    if (t) t.textContent = text;
+  }
 }
 
 // ----- Modals -----
@@ -245,15 +248,21 @@ function flashField(el) {
 
 // ----- Render -----
 function render() {
-  // Live card + tile state
+  grid.querySelectorAll('.tile').forEach(t => {
+    t.classList.remove('is-active', 'disabled');
+    const timer = t.querySelector('.live-timer');
+    if (timer) timer.textContent = '00:00';
+  });
+
   if (active) {
-    liveCard.classList.remove('hidden');
-    liveType.textContent = TYPE_META[active.type].title;
-    grid.querySelectorAll('.tile').forEach(t => t.classList.add('disabled'));
+    grid.querySelectorAll('.tile').forEach(t => {
+      if (t.dataset.action === active.type) {
+        t.classList.add('is-active');
+      } else {
+        t.classList.add('disabled');
+      }
+    });
     tickNow();
-  } else {
-    liveCard.classList.add('hidden');
-    grid.querySelectorAll('.tile').forEach(t => t.classList.remove('disabled'));
   }
 
   renderEntries();
