@@ -51,7 +51,6 @@ $('saveBtn').addEventListener('click', () => {
   const meta = TYPE_META[pendingSave.type];
   const volume = parseInt($('volumeInput').value, 10);
   const source = stopModal.querySelector('.seg-btn.active')?.dataset.source || null;
-  const note = $('noteInput').value.trim() || null;
 
   if (meta.needsVolume && (isNaN(volume) || volume < 0)) {
     flashField($('volumeInput'));
@@ -62,16 +61,15 @@ $('saveBtn').addEventListener('click', () => {
     return;
   }
 
-  const entry = {
+  entries.push({
     id: cryptoId(),
     type: pendingSave.type,
     start: pendingSave.start,
     end: pendingSave.end,
     volume: meta.needsVolume ? volume : null,
     source: meta.needsSource ? source : null,
-    note,
-  };
-  entries.push(entry);
+    note: null,
+  });
   saveEntries();
   pendingSave = null;
   hideModal(stopModal);
@@ -117,7 +115,6 @@ $('saveEdit').addEventListener('click', () => {
   if (meta.needsSource) {
     e.source = editModal.querySelector('.seg-btn.active')?.dataset.editSource || e.source;
   }
-  e.note = $('editNote').value.trim() || null;
   saveEntries();
   editingId = null;
   hideModal(editModal);
@@ -174,9 +171,25 @@ function stopSession() {
   active = null;
   saveActive();
   stopTick();
-  render();
 
-  // Open modal to capture extras
+  const meta = TYPE_META[session.type];
+  // Breast sessions need no extra info — save immediately, no popup.
+  if (!meta.needsVolume && !meta.needsSource) {
+    entries.push({
+      id: cryptoId(),
+      type: session.type,
+      start: session.start,
+      end: session.end,
+      volume: null,
+      source: null,
+      note: null,
+    });
+    saveEntries();
+    render();
+    return;
+  }
+
+  render();
   pendingSave = session;
   openSaveModal(session);
 }
@@ -211,7 +224,6 @@ function openSaveModal(session) {
   $('volumeField').classList.toggle('hidden', !meta.needsVolume);
 
   $('volumeInput').value = '';
-  $('noteInput').value = '';
   stopModal.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
 
   showModal(stopModal);
@@ -229,7 +241,6 @@ function openEditModal(id) {
   $('editSourceField').classList.toggle('hidden', !meta.needsSource);
   $('editVolumeField').classList.toggle('hidden', !meta.needsVolume);
   $('editVolume').value = e.volume ?? '';
-  $('editNote').value = e.note ?? '';
   editModal.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
   if (meta.needsSource && e.source) {
     editModal.querySelector(`[data-edit-source="${e.source}"]`)?.classList.add('active');
@@ -319,7 +330,6 @@ function renderEntry(e) {
     <span>${formatTimeRange(e.start, e.end)}</span>
     <span class="dot">•</span>
     <span>${formatDuration(e.end - e.start)}</span>
-    ${e.note ? `<span class="dot">•</span><span>${escapeHtml(e.note)}</span>` : ''}
   `;
   main.append(title, metaRow);
 
