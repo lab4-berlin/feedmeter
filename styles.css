@@ -142,61 +142,48 @@ body {
 
 .tile {
   position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 18px;
-  padding: 18px 16px;
-  min-height: 130px;
-  border-radius: var(--radius);
-  border: 1px solid var(--line);
-  background: var(--surface);
-  color: var(--ink);
-  box-shadow: var(--shadow);
-  cursor: pointer;
-  transition: transform 0.08s ease, box-shadow 0.2s ease;
-  overflow: hidden;
-}
-.tile:active { transform: scale(0.98); }
-.tile::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: var(--tile-tint, transparent);
-  opacity: 0.55;
-  z-index: 0;
-}
-.tile > * { position: relative; z-index: 1; }
-
-.tile-icon {
-  width: 52px; height: 52px;
   display: grid;
   place-items: center;
-  border-radius: 14px;
-  background: rgba(255,255,255,0.8);
+  padding: 20px;
+  min-height: 160px;
+  border-radius: var(--radius);
+  border: 1px solid transparent;
+  background: var(--tile-bg, var(--surface));
   color: var(--tile-ink, var(--plum));
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  transition: transform 0.08s ease, box-shadow 0.2s ease, filter 0.2s ease;
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
 }
-.tile-label {
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-}
-.tile-sub {
-  font-size: 13px;
-  color: var(--muted);
-  margin-top: -10px;
+.tile:active { transform: scale(0.97); }
+
+.tile-svg {
+  width: 88%;
+  max-width: 140px;
+  height: auto;
+  display: block;
 }
 
-.tile-left   { --tile-tint: linear-gradient(135deg, #ffe6ec, #fff); --tile-ink: #d8607d; }
-.tile-right  { --tile-tint: linear-gradient(135deg, #ffe1e9, #fff); --tile-ink: #c5587b; }
-.tile-bottle { --tile-tint: linear-gradient(135deg, #fff1da, #fff); --tile-ink: #b97a35; }
-.tile-pump   { --tile-tint: linear-gradient(135deg, #e6f3ee, #fff); --tile-ink: #4f9b80; }
+.tile-left,
+.tile-right {
+  --tile-bg: #ece1f6;
+  --tile-ink: #7a55a8;
+  --tile-border: #ddccef;
+}
+.tile-bottle,
+.tile-pump {
+  --tile-bg: #fbeec0;
+  --tile-ink: #a87523;
+  --tile-border: #f1de9a;
+}
+
+.tile { border-color: var(--tile-border); }
 
 .tile.disabled {
-  opacity: 0.45;
+  opacity: 0.4;
   pointer-events: none;
-  filter: saturate(0.6);
+  filter: saturate(0.5);
 }
 
 /* Stats */

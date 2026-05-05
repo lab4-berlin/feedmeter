@@ -37,55 +37,6 @@
       </button>
     </section>
 
-    <!-- 4 big action buttons -->
-    <section class="grid" id="actionGrid" aria-label="Start a new session">
-      <button class="tile tile-left" data-action="left">
-        <span class="tile-icon" aria-hidden="true">
-          <svg viewBox="0 0 48 48" width="40" height="40" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="18" cy="24" r="14"/>
-            <circle cx="18" cy="24" r="3" fill="currentColor"/>
-          </svg>
-        </span>
-        <span class="tile-label">Left</span>
-        <span class="tile-sub">Breast</span>
-      </button>
-
-      <button class="tile tile-right" data-action="right">
-        <span class="tile-icon" aria-hidden="true">
-          <svg viewBox="0 0 48 48" width="40" height="40" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <circle cx="30" cy="24" r="14"/>
-            <circle cx="30" cy="24" r="3" fill="currentColor"/>
-          </svg>
-        </span>
-        <span class="tile-label">Right</span>
-        <span class="tile-sub">Breast</span>
-      </button>
-
-      <button class="tile tile-bottle" data-action="bottle">
-        <span class="tile-icon" aria-hidden="true">
-          <svg viewBox="0 0 48 48" width="40" height="40" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M19 6h10M20 6v4M28 6v4M16 14h16l-2 28a4 4 0 0 1-4 4h-4a4 4 0 0 1-4-4z"/>
-            <line x1="17" y1="26" x2="31" y2="26"/>
-          </svg>
-        </span>
-        <span class="tile-label">Bottle</span>
-        <span class="tile-sub">Milk / Formula</span>
-      </button>
-
-      <button class="tile tile-pump" data-action="pump">
-        <span class="tile-icon" aria-hidden="true">
-          <svg viewBox="0 0 48 48" width="40" height="40" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-            <rect x="8" y="14" width="20" height="22" rx="3"/>
-            <path d="M28 20h8a4 4 0 0 1 4 4v4a4 4 0 0 1-4 4h-8"/>
-            <line x1="14" y1="14" x2="14" y2="10"/>
-            <line x1="22" y1="14" x2="22" y2="10"/>
-          </svg>
-        </span>
-        <span class="tile-label">Pump</span>
-        <span class="tile-sub">Express milk</span>
-      </button>
-    </section>
-
     <!-- Quick stats -->
     <section class="stats" id="stats">
       <div class="stat">
@@ -100,6 +51,41 @@
         <span class="stat-label">Today (intake)</span>
         <span class="stat-value" id="statIntake">0 ml</span>
       </div>
+    </section>
+
+    <!-- 4 big action buttons -->
+    <section class="grid" id="actionGrid" aria-label="Start a new session">
+      <button class="tile tile-left" data-action="left" aria-label="Left breast">
+        <svg class="tile-svg" viewBox="0 0 120 80" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="40" cy="40" r="26" fill="currentColor"/>
+          <circle cx="40" cy="40" r="6" fill="#fff"/>
+          <circle cx="80" cy="40" r="26" opacity="0.28"/>
+        </svg>
+      </button>
+
+      <button class="tile tile-right" data-action="right" aria-label="Right breast">
+        <svg class="tile-svg" viewBox="0 0 120 80" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="40" cy="40" r="26" opacity="0.28"/>
+          <circle cx="80" cy="40" r="26" fill="currentColor"/>
+          <circle cx="80" cy="40" r="6" fill="#fff"/>
+        </svg>
+      </button>
+
+      <button class="tile tile-bottle" data-action="bottle" aria-label="Bottle">
+        <svg class="tile-svg" viewBox="0 0 80 80" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M30 10h20M32 10v6M48 10v6M26 22h28l-3 44a6 6 0 0 1-6 6h-10a6 6 0 0 1-6-6z"/>
+          <line x1="28" y1="40" x2="52" y2="40"/>
+        </svg>
+      </button>
+
+      <button class="tile tile-pump" data-action="pump" aria-label="Pump">
+        <svg class="tile-svg" viewBox="0 0 80 80" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="12" y="22" width="34" height="40" rx="5"/>
+          <path d="M46 32h14a6 6 0 0 1 6 6v8a6 6 0 0 1-6 6H46"/>
+          <line x1="22" y1="22" x2="22" y2="14"/>
+          <line x1="36" y1="22" x2="36" y2="14"/>
+        </svg>
+      </button>
     </section>
 
     <!-- History -->
