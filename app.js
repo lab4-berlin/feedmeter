@@ -1165,7 +1165,7 @@ function tickMetrics() {
   if (lastFeed) {
     $('statLast').textContent = relativeTime(lastFeed.end);
     const intervalMin = Number(state.settings.feedingIntervalMin) || 180;
-    const dueAt = (lastFeed.end || 0) + intervalMin * 60 * 1000;
+    const dueAt = (lastFeed.start || 0) + intervalMin * 60 * 1000;
     const diff = dueAt - now;
     const nextEl = $('statNext');
     if (diff > 0) {
@@ -1179,6 +1179,18 @@ function tickMetrics() {
     $('statLast').textContent = '—';
     $('statNext').textContent = '—';
     $('statNext').classList.remove('overdue');
+  }
+
+  // Breast alternation indicator
+  grid.querySelectorAll('.tile[data-action="left"], .tile[data-action="right"]').forEach(t => t.classList.remove('is-next'));
+  if (!active) {
+    const lastBreast = state.entries
+      .filter(e => (e.type === 'left' || e.type === 'right') && e.end && !e.isComfort)
+      .sort((a, b) => (b.start || 0) - (a.start || 0))[0];
+    if (lastBreast) {
+      const nextType = lastBreast.type === 'left' ? 'right' : 'left';
+      grid.querySelector(`.tile[data-action="${nextType}"]`)?.classList.add('is-next');
+    }
   }
 
   let bottleMl = 0;

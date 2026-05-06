@@ -285,6 +285,24 @@ body {
   filter: saturate(0.5);
 }
 
+/* Next-breast suggestion */
+.tile.is-next {
+  border-color: currentColor;
+  box-shadow: 0 0 0 2px currentColor inset, var(--shadow);
+}
+.tile.is-next::after {
+  content: 'next';
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.5;
+  pointer-events: none;
+}
+
 /* Stats */
 .stats {
   display: grid;
