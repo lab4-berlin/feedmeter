@@ -1204,8 +1204,11 @@ function tickMetrics() {
 
   let bottleMl = 0;
   let breastMs = 0;
+  let feedCount = 0;
   for (const e of state.entries) {
     if ((e.start || 0) < todayStart) continue;
+    if (!TYPE_META[e.type]?.isFeed || e.isComfort) continue;
+    feedCount++;
     if (e.type === 'bottle' && e.volume) bottleMl += e.volume;
     if ((e.type === 'left' || e.type === 'right') && e.start && e.end) {
       breastMs += (e.end - e.start);
@@ -1216,7 +1219,10 @@ function tickMetrics() {
     breastMs += now - active.start;
   }
   const breastMin = Math.round(breastMs / 60000);
-  $('statTodayFeed').textContent = `${bottleMl} ml · ${breastMin} min`;
+  const feedParts = [`${feedCount}×`];
+  if (bottleMl) feedParts.push(`${bottleMl} ml`);
+  if (breastMin) feedParts.push(`${breastMin} min`);
+  $('statTodayFeed').textContent = feedParts.join(' · ');
 
   // ----- Pumping -----
   const pumps = state.entries.filter(e => e.type === 'pump' && e.end);
