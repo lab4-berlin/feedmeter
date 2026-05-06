@@ -15,7 +15,7 @@
  *        user                   (repeated; one row per known user name)
  */
 
-const ENTRIES_SHEET = 'entries';
+const ENTRIES_SHEET = 'feedings';
 const SETTINGS_SHEET = 'settings';
 const WEIGHT_SHEET = 'weight';
 const ENTRIES_HEADERS = [
