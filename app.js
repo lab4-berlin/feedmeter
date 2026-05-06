@@ -8,6 +8,7 @@ const LS = {
 };
 
 const isAndroid = /Android/i.test(navigator.userAgent);
+let alarmDue = parseInt(localStorage.getItem('feedmeter.alarmDue') || '0', 10);
 
 // ----- Type metadata -----
 const TYPE_META = {
@@ -1190,6 +1191,9 @@ function tickMetrics() {
     $('statNext').classList.remove('overdue');
   }
 
+  // Alarm indicator — show bell while the set alarm is still in the future
+  $('alarmSetIcon').classList.toggle('hidden', !(alarmDue > now));
+
   // Breast alternation indicator
   grid.querySelectorAll('.tile[data-action="left"], .tile[data-action="right"]').forEach(t => t.classList.remove('is-next'));
   if (!active) {
@@ -1344,6 +1348,8 @@ function setFeedingAlarm(dueTs) {
   const label = encodeURIComponent('Next feeding ' + formatClock(dueTs));
   // intent:// with explicit host + package targets Google Clock reliably on Pixel/Chrome PWA
   const uri = `intent://alarm#Intent;action=android.intent.action.SET_ALARM;S.android.intent.extra.alarm.MESSAGE=${label};i.android.intent.extra.alarm.HOUR=${hour};i.android.intent.extra.alarm.MINUTES=${min};B.android.intent.extra.alarm.SKIP_UI=true;package=com.google.android.deskclock;end`;
+  alarmDue = dueTs;
+  localStorage.setItem('feedmeter.alarmDue', dueTs);
   window.location.href = uri;
 }
 
