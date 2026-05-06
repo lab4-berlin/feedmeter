@@ -25,6 +25,8 @@ const editModal = $('editModal');
 const setupModal = $('setupModal');
 const userModal = $('userModal');
 const settingsModal = $('settingsModal');
+const voiceConflictModal = $('voiceConflictModal');
+const comfortModal = $('comfortModal');
 const syncBanner = $('syncBanner');
 const userChip = $('userChip');
 
@@ -41,6 +43,8 @@ let state = {
 let active = loadActive();
 let pendingSave = null;
 let editingId = null;
+let pendingComfort = null;  // entry held for comfort-feeding prompt
+let pendingOpenEntry = null; // voice-started open entry awaiting conflict resolution
 let tickHandle = null;
 let metricsHandle = null;
 
@@ -78,6 +82,7 @@ async function init() {
   }
   if (active) startTick();
   startMetricsTick();
+  startVoicePoll();
 }
 
 // ----- Event wiring -----
@@ -156,6 +161,20 @@ function bindEvents() {
   $('saveEdit').addEventListener('click', confirmEdit);
   $('deleteEntry').addEventListener('click', confirmDelete);
 
+  // Comfort feeding modal
+  $('comfortRealBtn').addEventListener('click', () => resolveComfort(false));
+  $('comfortOnlyBtn').addEventListener('click', () => resolveComfort(true));
+  comfortModal.addEventListener('click', (e) => {
+    if (e.target === comfortModal) resolveComfort(false); // backdrop = real feeding
+  });
+
+  // Voice conflict modal
+  $('vcDiscard').addEventListener('click', vcDiscard);
+  $('vcSwitch').addEventListener('click', vcSwitch);
+  voiceConflictModal.addEventListener('click', (e) => {
+    if (e.target === voiceConflictModal) vcDiscard();
+  });
+
   // Backdrop close
   [stopModal, editModal, settingsModal, userModal].forEach(m => {
     m.addEventListener('click', (e) => {
@@ -207,6 +226,7 @@ async function bootstrap() {
   state.users = data.users || [];
   state.settings = Object.assign({ feedingIntervalMin: 180 }, data.settings || {});
   saveCache();
+  if (data.openEntry) handleOpenEntry(data.openEntry);
   render();
   return data;
 }
@@ -217,6 +237,80 @@ function saveCache() {
     users: state.users,
     settings: state.settings,
   }));
+}
+
+// ----- Voice session handling -----
+
+function handleOpenEntry(oe) {
+  if (!oe || !oe.id || !oe.type || !oe.start) return;
+
+  // Already handling this exact voice session — nothing to do
+  if (active && active.voiceId === oe.id) return;
+
+  if (!active) {
+    // No local session running — silently resume the voice-started one
+    active = { type: oe.type, start: oe.start, voiceId: oe.id };
+    saveActive();
+    startTick();
+  } else {
+    // Conflict: a local session is already running
+    pendingOpenEntry = oe;
+    const meta = TYPE_META[oe.type];
+    const activeMeta = TYPE_META[active.type];
+    $('vcSub').textContent =
+      `"${meta?.title || oe.type}" started via Google Home at ${formatClock(oe.start)}. ` +
+      `You have an active "${activeMeta?.title || active.type}" session running.`;
+    showModal(voiceConflictModal);
+  }
+}
+
+async function vcDiscard() {
+  if (!pendingOpenEntry) return hideModal(voiceConflictModal);
+  const id = pendingOpenEntry.id;
+  pendingOpenEntry = null;
+  hideModal(voiceConflictModal);
+  try {
+    await api('discard-open', { id });
+  } catch (err) {
+    flashSync('Could not discard voice session: ' + err.message, 'error');
+  }
+}
+
+async function vcSwitch() {
+  if (!pendingOpenEntry) return hideModal(voiceConflictModal);
+  const oe = pendingOpenEntry;
+  pendingOpenEntry = null;
+  hideModal(voiceConflictModal);
+
+  // Close the current local session (save without prompting for volume)
+  if (active) {
+    const oldSession = { ...active, end: Date.now() };
+    active = null;
+    saveActive();
+    stopTick();
+    persistEntry({
+      type: oldSession.type,
+      start: oldSession.start,
+      end: oldSession.end,
+      volume: null,
+      source: null,
+      voiceId: oldSession.voiceId || null,
+    });
+  }
+
+  // Resume the voice-started session
+  active = { type: oe.type, start: oe.start, voiceId: oe.id };
+  saveActive();
+  startTick();
+  render();
+}
+
+// Poll for voice-started sessions every 60 s while the app is visible
+function startVoicePoll() {
+  setInterval(() => {
+    if (!state.apiUrl || !state.passcode || document.hidden) return;
+    bootstrap().catch(() => {});
+  }, 60000);
 }
 
 // ----- Setup wizard -----
@@ -383,6 +477,8 @@ function openSettings() {
   if (!state.apiUrl || !state.passcode) return openSetup();
   hideError($('settingsError'));
   $('settingFeed').value = state.settings.feedingIntervalMin || '';
+  $('settingMinDuration').value = state.settings.minFeedDurationMin ?? '';
+  $('settingMinVolume').value = state.settings.minBottleVolumeMl ?? '';
   showModal(settingsModal);
 }
 
@@ -390,11 +486,14 @@ async function saveSettings() {
   hideError($('settingsError'));
   const feed = parseInt($('settingFeed').value, 10);
   if (isNaN(feed) || feed < 30) return showError($('settingsError'), 'Feeding interval must be ≥ 30');
+  const minDur = $('settingMinDuration').value === '' ? null : parseInt($('settingMinDuration').value, 10);
+  const minVol = $('settingMinVolume').value === '' ? null : parseInt($('settingMinVolume').value, 10);
   try {
     setBusy($('settingsSave'), true);
-    const data = await api('update-settings', {
-      settings: { feedingIntervalMin: feed },
-    });
+    const patch = { feedingIntervalMin: feed };
+    if (minDur !== null) patch.minFeedDurationMin = minDur;
+    if (minVol !== null) patch.minBottleVolumeMl = minVol;
+    const data = await api('update-settings', { settings: patch });
     state.settings = Object.assign(state.settings, data.settings || {});
     saveCache();
     hideModal(settingsModal);
@@ -426,17 +525,26 @@ async function stopSession() {
 
   const meta = TYPE_META[session.type];
   if (!meta.needsVolume && !meta.needsSource) {
-    // Breast: persist immediately, no modal
+    // Breast: check duration threshold before persisting
+    const durationSec = (session.end - session.start) / 1000;
+    const minDurationSec = (Number(state.settings.minFeedDurationMin) || 0) * 60;
+    if (meta.isFeed && minDurationSec > 0 && durationSec < minDurationSec) {
+      pendingComfort = { type: session.type, start: session.start, end: session.end, volume: null, source: null, voiceId: session.voiceId || null };
+      openComfortModal(`${meta.title} · ${formatDuration(session.end - session.start)}`);
+      return;
+    }
     await persistEntry({
       type: session.type,
       start: session.start,
       end: session.end,
       volume: null,
       source: null,
+      isComfort: false,
+      voiceId: session.voiceId || null,
     });
     return;
   }
-  pendingSave = session;
+  pendingSave = session; // session carries voiceId if voice-started
   openSaveModal(session);
 }
 
@@ -454,15 +562,29 @@ async function confirmSave() {
     end: pendingSave.end,
     volume: meta.needsVolume ? volume : null,
     source: meta.needsSource ? source : null,
+    voiceId: pendingSave.voiceId || null,
   };
+
+  // Check bottle volume threshold
+  const minVolumeMl = Number(state.settings.minBottleVolumeMl) || 0;
+  if (meta.isFeed && meta.needsVolume && minVolumeMl > 0 && volume < minVolumeMl) {
+    pendingComfort = entry;
+    pendingSave = null;
+    hideModal(stopModal);
+    openComfortModal(`Bottle · ${volume} ml`);
+    return;
+  }
+
   pendingSave = null;
   hideModal(stopModal);
-  await persistEntry(entry);
+  await persistEntry({ ...entry, isComfort: false });
 }
 
 async function persistEntry(entry) {
-  // Optimistic local insert with a temp id
-  const tempId = 'tmp-' + cryptoId();
+  const voiceId = entry.voiceId || null;
+  // Voice sessions already have a row in the sheet; use their id directly.
+  // Manual sessions get a temp id until the server assigns a real one.
+  const tempId = voiceId || ('tmp-' + cryptoId());
   const now = new Date().toISOString();
   const optimistic = {
     id: tempId,
@@ -471,17 +593,36 @@ async function persistEntry(entry) {
     end: entry.end,
     volume: entry.volume,
     source: entry.source,
+    isComfort: !!entry.isComfort,
     user: state.user,
     createdAt: now,
     updatedAt: now,
     pending: true,
   };
-  state.entries.push(optimistic);
+  const existingIdx = state.entries.findIndex(e => e.id === tempId);
+  if (existingIdx >= 0) state.entries[existingIdx] = optimistic;
+  else state.entries.push(optimistic);
   saveCache();
   render();
 
   try {
-    const data = await api('add-entry', { entry });
+    let data;
+    if (voiceId) {
+      // Close the existing open entry in the sheet
+      data = await api('update-entry', {
+        entry: {
+          id: voiceId,
+          type: entry.type,
+          start: entry.start,
+          end: entry.end,
+          volume: entry.volume,
+          source: entry.source,
+          isComfort: !!entry.isComfort,
+        },
+      });
+    } else {
+      data = await api('add-entry', { entry });
+    }
     const saved = data.entry;
     const idx = state.entries.findIndex(e => e.id === tempId);
     if (idx >= 0) state.entries[idx] = saved;
@@ -516,6 +657,8 @@ function openEditModal(id) {
   $('editSourceField').classList.toggle('hidden', !meta.needsSource);
   $('editVolumeField').classList.toggle('hidden', !meta.needsVolume);
   $('editVolume').value = e.volume ?? '';
+  $('editComfortField').classList.toggle('hidden', !meta.isFeed);
+  $('editIsComfort').checked = !!e.isComfort;
   editModal.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
   if (meta.needsSource && e.source) {
     editModal.querySelector(`[data-edit-source="${e.source}"]`)?.classList.add('active');
@@ -539,6 +682,7 @@ async function confirmEdit() {
     end: endMs,
     volume: meta.needsVolume ? (parseInt($('editVolume').value, 10) || null) : null,
     source: meta.needsSource ? (editModal.querySelector('.seg-btn.active')?.dataset.editSource || e.source) : null,
+    isComfort: meta.isFeed ? $('editIsComfort').checked : false,
   };
   state.entries[idx] = { ...next, pending: true };
   saveCache();
@@ -578,6 +722,19 @@ async function confirmDelete() {
 }
 
 // ----- Modals helpers -----
+
+function openComfortModal(label) {
+  $('comfortSub').textContent = `${label} — looks short. Was this a real feeding?`;
+  showModal(comfortModal);
+}
+
+async function resolveComfort(isComfort) {
+  if (!pendingComfort) return hideModal(comfortModal);
+  const entry = { ...pendingComfort, isComfort };
+  pendingComfort = null;
+  hideModal(comfortModal);
+  await persistEntry(entry);
+}
 
 function openSaveModal(session) {
   const meta = TYPE_META[session.type];
@@ -747,12 +904,15 @@ function renderEntry(e) {
   const metaRow = document.createElement('div');
   metaRow.className = 'entry-meta';
   const dur = (e.start && e.end) ? formatDuration(e.end - e.start) : '—';
+  const needsVolume = (e.type === 'bottle' || e.type === 'pump') && e.volume == null && e.end != null;
   metaRow.innerHTML = `
     <span>${formatTimeRange(e.start, e.end)}</span>
     <span class="dot">•</span>
     <span>${dur}</span>
     ${e.user ? `<span class="dot">•</span><span>${escapeHtml(e.user)}</span>` : ''}
     ${e.pending ? `<span class="dot">•</span><span class="pending-mark">syncing…</span>` : ''}
+    ${needsVolume ? `<span class="dot">•</span><span class="needs-volume-hint">add volume</span>` : ''}
+    ${e.isComfort ? `<span class="dot">•</span><span class="comfort-mark">comfort</span>` : ''}
   `;
   main.append(title, metaRow);
 
@@ -779,8 +939,8 @@ function tickMetrics() {
   const now = Date.now();
   const todayStart = (() => { const d = new Date(); d.setHours(0,0,0,0); return d.getTime(); })();
 
-  // ----- Feeding (breast or bottle) -----
-  const feeds = state.entries.filter(e => TYPE_META[e.type]?.isFeed && e.end);
+  // ----- Feeding (breast or bottle) — exclude comfort feedings -----
+  const feeds = state.entries.filter(e => TYPE_META[e.type]?.isFeed && e.end && !e.isComfort);
   feeds.sort((a, b) => (b.end || 0) - (a.end || 0));
   const lastFeed = feeds[0];
 

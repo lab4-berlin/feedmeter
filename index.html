@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23f7c8d4'/%3E%3Ccircle cx='32' cy='28' r='10' fill='%23fff'/%3E%3Crect x='28' y='34' width='8' height='18' rx='4' fill='%23fff'/%3E%3C/svg%3E" />
   <link rel="apple-touch-icon" href="icon-192.svg" />
-  <link rel="stylesheet" href="styles.css?v=12" />
+  <link rel="stylesheet" href="styles.css?v=14" />
 </head>
 <body>
   <header class="app-header">
@@ -242,6 +242,18 @@
         <p class="field-hint">Used for the "next feeding due" countdown. Newborns: 120–180.</p>
       </div>
 
+      <div class="field">
+        <label for="settingMinDuration">Min breast feed duration (minutes)</label>
+        <input id="settingMinDuration" type="number" inputmode="numeric" min="0" max="30" step="1" />
+        <p class="field-hint">Sessions shorter than this will be flagged as possible comfort feeding.</p>
+      </div>
+
+      <div class="field">
+        <label for="settingMinVolume">Min bottle volume (ml)</label>
+        <input id="settingMinVolume" type="number" inputmode="numeric" min="0" max="200" step="5" />
+        <p class="field-hint">Bottles below this amount will be flagged as possible comfort feeding.</p>
+      </div>
+
       <div class="modal-error hidden" id="settingsError"></div>
 
       <div class="modal-actions space-between">
@@ -307,6 +319,13 @@
         <input id="editVolume" type="number" inputmode="numeric" min="0" step="5" />
       </div>
 
+      <div class="field" id="editComfortField">
+        <label class="checkbox-label">
+          <input type="checkbox" id="editIsComfort" />
+          Comfort feeding — exclude from countdown &amp; stats
+        </label>
+      </div>
+
       <div class="modal-actions space-between">
         <button class="btn danger" id="deleteEntry">Delete</button>
         <div>
@@ -317,6 +336,31 @@
     </div>
   </div>
 
-  <script src="app.js?v=12"></script>
+  <!-- Comfort feeding modal -->
+  <div class="modal hidden" id="comfortModal" role="dialog" aria-modal="true" aria-labelledby="comfortTitle">
+    <div class="modal-card">
+      <h3 id="comfortTitle">Short feeding</h3>
+      <p class="modal-sub" id="comfortSub"></p>
+      <p class="field-hint">Comfort feedings are saved but don't reset the "next feeding" countdown or today's totals.</p>
+      <div class="modal-actions space-between">
+        <button class="btn ghost" id="comfortOnlyBtn" type="button">Comfort only</button>
+        <button class="btn primary" id="comfortRealBtn" type="button">Real feeding</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Voice conflict modal -->
+  <div class="modal hidden" id="voiceConflictModal" role="dialog" aria-modal="true" aria-labelledby="vcTitle">
+    <div class="modal-card">
+      <h3 id="vcTitle">Voice session started</h3>
+      <p class="modal-sub" id="vcSub"></p>
+      <div class="modal-actions space-between">
+        <button class="btn ghost" id="vcDiscard" type="button">Discard voice</button>
+        <button class="btn primary" id="vcSwitch" type="button">Close old &amp; switch</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js?v=14"></script>
 </body>
 </html>

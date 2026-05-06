@@ -427,6 +427,10 @@ body {
 .entry:active { background: var(--surface-2); }
 .entry.pending { opacity: 0.7; }
 .pending-mark { color: var(--rose); font-weight: 600; }
+.needs-volume-hint { color: #c07a00; font-weight: 600; }
+.comfort-mark { color: #8b7ab8; font-weight: 600; }
+.checkbox-label { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; color: var(--ink); }
+.checkbox-label input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--rose); flex-shrink: 0; }
 
 .entry-icon {
   width: 38px; height: 38px;

@@ -19,7 +19,7 @@ const ENTRIES_SHEET = 'entries';
 const SETTINGS_SHEET = 'settings';
 const ENTRIES_HEADERS = [
   'id','createdAt','updatedAt','user','type',
-  'start','end','durationSec','volumeMl','source','deleted'
+  'start','end','durationSec','volumeMl','source','deleted','isComfort'
 ];
 const SETTINGS_HEADERS = ['key','value'];
 
@@ -67,6 +67,8 @@ function doPost(e) {
       case 'delete-entry':    return jsonOutput_({ ok: true, id: deleteEntry_(body.id, body.user) });
       case 'add-user':        return jsonOutput_({ ok: true, users: addUser_(body.name) });
       case 'update-settings': return jsonOutput_({ ok: true, settings: updateSettings_(body.settings) });
+      case 'start-voice':     return jsonOutput_({ ok: true, entry: startVoice_(body.type, body.user) });
+      case 'discard-open':    return jsonOutput_({ ok: true, id: deleteEntry_(body.id, body.user) });
       default:                return jsonOutput_({ ok: false, error: 'Unknown action: ' + action });
     }
   } catch (err) {
@@ -127,6 +129,7 @@ function bootstrap_() {
     users: getUsers_(),
     settings: readSettings_(),
     entries: listEntries_(),
+    openEntry: findOpenEntry_(),
   };
 }
 
@@ -136,7 +139,26 @@ function listEntries_() {
   const s = getSheet_(ENTRIES_SHEET, ENTRIES_HEADERS);
   const data = s.getDataRange().getValues();
   if (data.length < 2) return [];
-  return data.slice(1).map(rowToEntry_).filter(e => e && !e.deleted);
+  return data.slice(1).map(rowToEntry_).filter(e => e && !e.deleted && e.end !== null);
+}
+
+function findOpenEntry_() {
+  const s = getSheet_(ENTRIES_SHEET, ENTRIES_HEADERS);
+  const data = s.getDataRange().getValues();
+  if (data.length < 2) return null;
+  // Return the most recent non-deleted entry that has no end time
+  let found = null;
+  for (let i = 1; i < data.length; i++) {
+    const e = rowToEntry_(data[i]);
+    if (e && !e.deleted && e.end === null) found = e;
+  }
+  return found;
+}
+
+function startVoice_(type, user) {
+  const validTypes = ['left', 'right', 'bottle', 'pump'];
+  if (!validTypes.includes(String(type || ''))) throw new Error('Invalid type: ' + type);
+  return addEntry_({ type: type, start: Date.now() }, user || 'voice');
 }
 
 function rowToEntry_(r) {
@@ -153,6 +175,7 @@ function rowToEntry_(r) {
     volume: r[8] === '' ? null : Number(r[8]),
     source: r[9] || null,
     deleted: r[10] === true || String(r[10]).toUpperCase() === 'TRUE',
+    isComfort: r[11] === true || String(r[11] || '').toUpperCase() === 'TRUE',
   };
 }
 
@@ -170,6 +193,7 @@ function addEntry_(entry, user) {
     entry.volume == null ? '' : Number(entry.volume),
     entry.source || '',
     false,
+    !!entry.isComfort,
   ]);
   return {
     id,
@@ -183,6 +207,7 @@ function addEntry_(entry, user) {
     volume: entry.volume == null ? null : Number(entry.volume),
     source: entry.source || null,
     deleted: false,
+    isComfort: !!entry.isComfort,
   };
 }
 
@@ -214,6 +239,7 @@ function updateEntry_(entry, user) {
     entry.volume == null ? '' : Number(entry.volume),
     entry.source || '',
     !!entry.deleted,
+    !!entry.isComfort,
   ]]);
   return {
     id: entry.id,
@@ -227,6 +253,7 @@ function updateEntry_(entry, user) {
     volume: entry.volume == null ? null : Number(entry.volume),
     source: entry.source || null,
     deleted: !!entry.deleted,
+    isComfort: !!entry.isComfort,
   };
 }
 
