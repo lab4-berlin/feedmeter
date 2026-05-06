@@ -25,7 +25,6 @@ const editModal = $('editModal');
 const setupModal = $('setupModal');
 const userModal = $('userModal');
 const settingsModal = $('settingsModal');
-const voiceConflictModal = $('voiceConflictModal');
 const comfortModal = $('comfortModal');
 const weightModal = $('weightModal');
 const syncBanner = $('syncBanner');
@@ -48,7 +47,6 @@ let active = loadActive();
 let pendingSave = null;
 let editingId = null;
 let pendingComfort = null;  // entry held for comfort-feeding prompt
-let pendingOpenEntry = null; // voice-started open entry awaiting conflict resolution
 let tickHandle = null;
 let metricsHandle = null;
 
@@ -87,7 +85,6 @@ async function init() {
   }
   if (active) startTick();
   startMetricsTick();
-  startVoicePoll();
 }
 
 // ----- Event wiring -----
@@ -191,13 +188,6 @@ function bindEvents() {
     if (e.target === comfortModal) resolveComfort(false); // backdrop = real feeding
   });
 
-  // Voice conflict modal
-  $('vcDiscard').addEventListener('click', vcDiscard);
-  $('vcSwitch').addEventListener('click', vcSwitch);
-  voiceConflictModal.addEventListener('click', (e) => {
-    if (e.target === voiceConflictModal) vcDiscard();
-  });
-
   // Backdrop close
   [stopModal, editModal, settingsModal, userModal].forEach(m => {
     m.addEventListener('click', (e) => {
@@ -250,7 +240,6 @@ async function bootstrap() {
   state.weights = data.weights || [];
   state.settings = Object.assign({ feedingIntervalMin: 180 }, data.settings || {});
   saveCache();
-  if (data.openEntry) handleOpenEntry(data.openEntry);
   render();
   if (activeTab === 'weight') renderWeightTab();
   return data;
@@ -263,80 +252,6 @@ function saveCache() {
     weights: state.weights,
     settings: state.settings,
   }));
-}
-
-// ----- Voice session handling -----
-
-function handleOpenEntry(oe) {
-  if (!oe || !oe.id || !oe.type || !oe.start) return;
-
-  // Already handling this exact voice session — nothing to do
-  if (active && active.voiceId === oe.id) return;
-
-  if (!active) {
-    // No local session running — silently resume the voice-started one
-    active = { type: oe.type, start: oe.start, voiceId: oe.id };
-    saveActive();
-    startTick();
-  } else {
-    // Conflict: a local session is already running
-    pendingOpenEntry = oe;
-    const meta = TYPE_META[oe.type];
-    const activeMeta = TYPE_META[active.type];
-    $('vcSub').textContent =
-      `"${meta?.title || oe.type}" started via Google Home at ${formatClock(oe.start)}. ` +
-      `You have an active "${activeMeta?.title || active.type}" session running.`;
-    showModal(voiceConflictModal);
-  }
-}
-
-async function vcDiscard() {
-  if (!pendingOpenEntry) return hideModal(voiceConflictModal);
-  const id = pendingOpenEntry.id;
-  pendingOpenEntry = null;
-  hideModal(voiceConflictModal);
-  try {
-    await api('discard-open', { id });
-  } catch (err) {
-    flashSync('Could not discard voice session: ' + err.message, 'error');
-  }
-}
-
-async function vcSwitch() {
-  if (!pendingOpenEntry) return hideModal(voiceConflictModal);
-  const oe = pendingOpenEntry;
-  pendingOpenEntry = null;
-  hideModal(voiceConflictModal);
-
-  // Close the current local session (save without prompting for volume)
-  if (active) {
-    const oldSession = { ...active, end: Date.now() };
-    active = null;
-    saveActive();
-    stopTick();
-    persistEntry({
-      type: oldSession.type,
-      start: oldSession.start,
-      end: oldSession.end,
-      volume: null,
-      source: null,
-      voiceId: oldSession.voiceId || null,
-    });
-  }
-
-  // Resume the voice-started session
-  active = { type: oe.type, start: oe.start, voiceId: oe.id };
-  saveActive();
-  startTick();
-  render();
-}
-
-// Poll for voice-started sessions every 60 s while the app is visible
-function startVoicePoll() {
-  setInterval(() => {
-    if (!state.apiUrl || !state.passcode || document.hidden) return;
-    bootstrap().catch(() => {});
-  }, 60000);
 }
 
 // ----- Tabs -----
@@ -747,7 +662,7 @@ async function stopSession() {
     const durationSec = (session.end - session.start) / 1000;
     const minDurationSec = (Number(state.settings.minFeedDurationMin) || 0) * 60;
     if (meta.isFeed && minDurationSec > 0 && durationSec < minDurationSec) {
-      pendingComfort = { type: session.type, start: session.start, end: session.end, volume: null, source: null, voiceId: session.voiceId || null };
+      pendingComfort = { type: session.type, start: session.start, end: session.end, volume: null, source: null };
       openComfortModal(`${meta.title} · ${formatDuration(session.end - session.start)}`);
       return;
     }
@@ -758,11 +673,10 @@ async function stopSession() {
       volume: null,
       source: null,
       isComfort: false,
-      voiceId: session.voiceId || null,
     });
     return;
   }
-  pendingSave = session; // session carries voiceId if voice-started
+  pendingSave = session;
   openSaveModal(session);
 }
 
@@ -780,7 +694,6 @@ async function confirmSave() {
     end: pendingSave.end,
     volume: meta.needsVolume ? volume : null,
     source: meta.needsSource ? source : null,
-    voiceId: pendingSave.voiceId || null,
   };
 
   // Check bottle volume threshold
@@ -799,10 +712,7 @@ async function confirmSave() {
 }
 
 async function persistEntry(entry) {
-  const voiceId = entry.voiceId || null;
-  // Voice sessions already have a row in the sheet; use their id directly.
-  // Manual sessions get a temp id until the server assigns a real one.
-  const tempId = voiceId || ('tmp-' + cryptoId());
+  const tempId = 'tmp-' + cryptoId();
   const now = new Date().toISOString();
   const optimistic = {
     id: tempId,
@@ -817,30 +727,12 @@ async function persistEntry(entry) {
     updatedAt: now,
     pending: true,
   };
-  const existingIdx = state.entries.findIndex(e => e.id === tempId);
-  if (existingIdx >= 0) state.entries[existingIdx] = optimistic;
-  else state.entries.push(optimistic);
+  state.entries.push(optimistic);
   saveCache();
   render();
 
   try {
-    let data;
-    if (voiceId) {
-      // Close the existing open entry in the sheet
-      data = await api('update-entry', {
-        entry: {
-          id: voiceId,
-          type: entry.type,
-          start: entry.start,
-          end: entry.end,
-          volume: entry.volume,
-          source: entry.source,
-          isComfort: !!entry.isComfort,
-        },
-      });
-    } else {
-      data = await api('add-entry', { entry });
-    }
+    const data = await api('add-entry', { entry });
     const saved = data.entry;
     const idx = state.entries.findIndex(e => e.id === tempId);
     if (idx >= 0) state.entries[idx] = saved;
