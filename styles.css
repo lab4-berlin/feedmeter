@@ -290,21 +290,8 @@ body {
   border-color: currentColor;
   box-shadow: 0 0 0 2px currentColor inset, var(--shadow);
 }
-.tile.is-next::after {
-  content: 'next';
-  position: absolute;
-  z-index: 2;
-  top: 8px;
-  right: 8px;
-  background: currentColor;
-  color: #fff;
-  font-size: 8px;
-  font-weight: 800;
-  letter-spacing: 0.07em;
-  text-transform: uppercase;
-  padding: 2px 6px;
-  border-radius: 6px;
-  pointer-events: none;
+.tile.is-next .tile-name::after {
+  content: ' · next';
 }
 
 /* Stats */
