@@ -1346,8 +1346,9 @@ function setFeedingAlarm(dueTs) {
   const hour = d.getHours();
   const min = d.getMinutes();
   const label = encodeURIComponent('Next feeding ' + formatClock(dueTs));
-  // intent:// with explicit host + package targets Google Clock reliably on Pixel/Chrome PWA
-  const uri = `intent://alarm#Intent;action=android.intent.action.SET_ALARM;S.android.intent.extra.alarm.MESSAGE=${label};i.android.intent.extra.alarm.HOUR=${hour};i.android.intent.extra.alarm.MINUTES=${min};B.android.intent.extra.alarm.SKIP_UI=true;package=com.google.android.deskclock;end`;
+  // No host in the URI = no data URI added to the intent, so Clock's action-only filter matches.
+  // SKIP_UI=false opens Clock with the time pre-filled; user taps once to save.
+  const uri = `intent:#Intent;action=android.intent.action.SET_ALARM;S.android.intent.extra.alarm.MESSAGE=${label};i.android.intent.extra.alarm.HOUR=${hour};i.android.intent.extra.alarm.MINUTES=${min};B.android.intent.extra.alarm.SKIP_UI=false;end`;
   alarmDue = dueTs;
   localStorage.setItem('feedmeter.alarmDue', dueTs);
   window.location.href = uri;
