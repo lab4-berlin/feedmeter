@@ -27,6 +27,7 @@ const userModal = $('userModal');
 const settingsModal = $('settingsModal');
 const voiceConflictModal = $('voiceConflictModal');
 const comfortModal = $('comfortModal');
+const weightModal = $('weightModal');
 const syncBanner = $('syncBanner');
 const userChip = $('userChip');
 
@@ -37,9 +38,12 @@ let state = {
   user: localStorage.getItem(LS.user) || '',
   entries: [],
   users: [],
+  weights: [],
   settings: { feedingIntervalMin: 180 },
   historyDate: null, // YYYY-MM-DD or null = today (live)
 };
+let activeTab = 'feedings';
+let editingWeightId = null;
 let active = loadActive();
 let pendingSave = null;
 let editingId = null;
@@ -54,6 +58,7 @@ try {
   if (cached) {
     if (Array.isArray(cached.entries)) state.entries = cached.entries;
     if (Array.isArray(cached.users)) state.users = cached.users;
+    if (Array.isArray(cached.weights)) state.weights = cached.weights;
     if (cached.settings && typeof cached.settings === 'object') {
       Object.assign(state.settings, cached.settings);
     }
@@ -161,6 +166,24 @@ function bindEvents() {
   $('saveEdit').addEventListener('click', confirmEdit);
   $('deleteEntry').addEventListener('click', confirmDelete);
 
+  // Tab switching
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+  });
+
+  // Weight modal
+  $('logWeightBtn').addEventListener('click', () => openWeightModal());
+  $('cancelWeightBtn').addEventListener('click', () => hideModal(weightModal));
+  $('saveWeightBtn').addEventListener('click', saveWeight);
+  $('deleteWeightBtn').addEventListener('click', confirmDeleteWeight);
+  weightModal.querySelectorAll('[data-wtiming]').forEach(b => {
+    b.addEventListener('click', () => {
+      weightModal.querySelectorAll('[data-wtiming]').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+    });
+  });
+  weightModal.addEventListener('click', (e) => { if (e.target === weightModal) hideModal(weightModal); });
+
   // Comfort feeding modal
   $('comfortRealBtn').addEventListener('click', () => resolveComfort(false));
   $('comfortOnlyBtn').addEventListener('click', () => resolveComfort(true));
@@ -224,10 +247,12 @@ async function bootstrap() {
   const data = await api('bootstrap');
   state.entries = data.entries || [];
   state.users = data.users || [];
+  state.weights = data.weights || [];
   state.settings = Object.assign({ feedingIntervalMin: 180 }, data.settings || {});
   saveCache();
   if (data.openEntry) handleOpenEntry(data.openEntry);
   render();
+  if (activeTab === 'weight') renderWeightTab();
   return data;
 }
 
@@ -235,6 +260,7 @@ function saveCache() {
   localStorage.setItem(LS.cache, JSON.stringify({
     entries: state.entries,
     users: state.users,
+    weights: state.weights,
     settings: state.settings,
   }));
 }
@@ -311,6 +337,194 @@ function startVoicePoll() {
     if (!state.apiUrl || !state.passcode || document.hidden) return;
     bootstrap().catch(() => {});
   }, 60000);
+}
+
+// ----- Tabs -----
+
+function switchTab(tab) {
+  activeTab = tab;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  $('tabFeedings').classList.toggle('hidden', tab !== 'feedings');
+  $('tabWeight').classList.toggle('hidden', tab !== 'weight');
+  if (tab === 'weight') renderWeightTab();
+}
+
+// ----- Weight tab -----
+
+function renderWeightTab() {
+  const sorted = [...state.weights].sort((a, b) => b.date.localeCompare(a.date));
+  renderWeightChart([...sorted].reverse()); // oldest→newest for chart
+  renderWeightList(sorted);
+}
+
+function renderWeightChart(chronological) {
+  const container = $('weightChart');
+  const birthW = Number(state.settings.birthWeightG) || 0;
+
+  if (!chronological.length) {
+    container.innerHTML = birthW
+      ? `<p class="weight-birth-only">Birth weight: <strong>${(birthW / 1000).toFixed(3)} kg</strong></p>`
+      : '';
+    return;
+  }
+
+  const W = 340, H = 170;
+  const PAD = { top: 16, right: 38, bottom: 28, left: 46 };
+  const chartW = W - PAD.left - PAD.right;
+  const chartH = H - PAD.top - PAD.bottom;
+
+  const values = chronological.map(w => w.weightG);
+  const allValues = birthW ? [...values, birthW] : values;
+  let minV = Math.min(...allValues);
+  let maxV = Math.max(...allValues);
+  const spread = maxV - minV || 200;
+  minV = Math.max(0, minV - spread * 0.18);
+  maxV = maxV + spread * 0.18;
+  const range = maxV - minV;
+
+  const xOf = i => PAD.left + (chronological.length > 1 ? (i / (chronological.length - 1)) * chartW : chartW / 2);
+  const yOf = g => PAD.top + (1 - (g - minV) / range) * chartH;
+
+  const yTicks = [minV + range * 0.15, minV + range * 0.5, minV + range * 0.85];
+  let svg = `<svg viewBox="0 0 ${W} ${H}" xmlns="http://www.w3.org/2000/svg" class="weight-chart-svg">`;
+
+  // Y grid + labels
+  for (const g of yTicks) {
+    const y = yOf(g).toFixed(1);
+    svg += `<line x1="${PAD.left}" y1="${y}" x2="${W - PAD.right}" y2="${y}" class="chart-grid"/>`;
+    svg += `<text x="${PAD.left - 4}" y="${(parseFloat(y) + 4).toFixed(1)}" class="chart-label-y">${(g / 1000).toFixed(2)}</text>`;
+  }
+
+  // Birth weight baseline
+  if (birthW) {
+    const by = yOf(birthW).toFixed(1);
+    svg += `<line x1="${PAD.left}" y1="${by}" x2="${W - PAD.right}" y2="${by}" class="chart-birth"/>`;
+    svg += `<text x="${W - PAD.right - 3}" y="${(parseFloat(by) - 4).toFixed(1)}" class="chart-label-birth" text-anchor="end">birth</text>`;
+  }
+
+  // Connecting line
+  if (chronological.length > 1) {
+    const pts = chronological.map((w, i) => `${xOf(i).toFixed(1)},${yOf(w.weightG).toFixed(1)}`).join(' ');
+    svg += `<polyline points="${pts}" class="chart-line"/>`;
+  }
+
+  // Dots
+  chronological.forEach((w, i) => {
+    const cx = xOf(i).toFixed(1), cy = yOf(w.weightG).toFixed(1);
+    const cls = w.timing === 'before' ? 'chart-dot-before' : 'chart-dot-after';
+    svg += `<circle cx="${cx}" cy="${cy}" r="5" class="chart-dot ${cls}" data-wid="${w.id}"/>`;
+  });
+
+  // X labels (up to 4 evenly spaced)
+  const n = chronological.length;
+  const idxs = n <= 4
+    ? chronological.map((_, i) => i)
+    : [...new Set([0, Math.floor(n / 3), Math.floor(2 * n / 3), n - 1])];
+  for (const i of idxs) {
+    const d = new Date(chronological[i].date + 'T12:00:00');
+    const lbl = d.toLocaleDateString([], { month: 'short', day: 'numeric' });
+    svg += `<text x="${xOf(i).toFixed(1)}" y="${H - 4}" class="chart-label-x" text-anchor="middle">${escapeHtml(lbl)}</text>`;
+  }
+
+  svg += '</svg>';
+  container.innerHTML = svg;
+  container.querySelectorAll('.chart-dot').forEach(dot => {
+    dot.addEventListener('click', () => openWeightModal(dot.dataset.wid));
+  });
+}
+
+function renderWeightList(sortedDesc) {
+  const list = $('weightEntries');
+  const empty = $('weightEmpty');
+  list.innerHTML = '';
+  if (!sortedDesc.length) { empty.classList.remove('hidden'); return; }
+  empty.classList.add('hidden');
+  sortedDesc.slice(0, 30).forEach(w => {
+    const li = document.createElement('li');
+    li.className = 'weight-entry';
+    li.tabIndex = 0;
+    li.addEventListener('click', () => openWeightModal(w.id));
+    const d = new Date(w.date + 'T12:00:00');
+    const dateStr = d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
+    const timingLabel = w.timing === 'before' ? 'before feed' : 'after feed';
+    li.innerHTML = `
+      <span class="weight-entry-date">${escapeHtml(dateStr)}</span>
+      <span class="weight-entry-val">${(w.weightG / 1000).toFixed(3)} kg</span>
+      <span class="weight-timing-tag ${w.timing}">${timingLabel}</span>
+    `;
+    list.appendChild(li);
+  });
+}
+
+function openWeightModal(id) {
+  hideError($('weightError'));
+  weightModal.querySelectorAll('[data-wtiming]').forEach(b => b.classList.remove('active'));
+  if (id) {
+    const w = state.weights.find(x => x.id === id);
+    if (!w) return;
+    editingWeightId = id;
+    $('weightModalTitle').textContent = 'Edit weight';
+    $('weightInput').value = w.weightG;
+    $('weightDate').value = w.date;
+    (weightModal.querySelector(`[data-wtiming="${w.timing}"]`) || weightModal.querySelector('[data-wtiming="after"]')).classList.add('active');
+    $('deleteWeightBtn').classList.remove('hidden');
+  } else {
+    editingWeightId = null;
+    $('weightModalTitle').textContent = 'Log weight';
+    $('weightInput').value = '';
+    $('weightDate').value = todayKey();
+    weightModal.querySelector('[data-wtiming="after"]').classList.add('active');
+    $('deleteWeightBtn').classList.add('hidden');
+  }
+  showModal(weightModal);
+  setTimeout(() => $('weightInput').focus(), 120);
+}
+
+async function saveWeight() {
+  hideError($('weightError'));
+  const g = parseInt($('weightInput').value, 10);
+  if (isNaN(g) || g < 500 || g > 15000) return showError($('weightError'), 'Enter a valid weight (500–15000 g)');
+  const date = $('weightDate').value;
+  if (!date) return showError($('weightError'), 'Date required');
+  const timing = weightModal.querySelector('[data-wtiming].active')?.dataset.wtiming || 'after';
+  try {
+    setBusy($('saveWeightBtn'), true);
+    let data;
+    if (editingWeightId) {
+      data = await api('update-weight', { weight: { id: editingWeightId, weightG: g, date, timing } });
+      const idx = state.weights.findIndex(w => w.id === editingWeightId);
+      if (idx >= 0) state.weights[idx] = data.weight;
+    } else {
+      data = await api('add-weight', { weight: { weightG: g, date, timing } });
+      state.weights.push(data.weight);
+    }
+    saveCache();
+    hideModal(weightModal);
+    editingWeightId = null;
+    renderWeightTab();
+    flashSync('Saved', 'ok');
+  } catch (err) {
+    showError($('weightError'), err.message);
+  } finally {
+    setBusy($('saveWeightBtn'), false);
+  }
+}
+
+async function confirmDeleteWeight() {
+  if (!editingWeightId) return;
+  if (!confirm('Delete this weight entry?')) return;
+  const id = editingWeightId;
+  try {
+    await api('delete-weight', { id });
+    state.weights = state.weights.filter(w => w.id !== id);
+    saveCache();
+    hideModal(weightModal);
+    editingWeightId = null;
+    renderWeightTab();
+    flashSync('Deleted', 'ok');
+  } catch (err) {
+    flashSync('Could not delete: ' + err.message, 'error');
+  }
 }
 
 // ----- Setup wizard -----
@@ -479,6 +693,7 @@ function openSettings() {
   $('settingFeed').value = state.settings.feedingIntervalMin || '';
   $('settingMinDuration').value = state.settings.minFeedDurationMin ?? '';
   $('settingMinVolume').value = state.settings.minBottleVolumeMl ?? '';
+  $('settingBirthWeight').value = state.settings.birthWeightG || '';
   showModal(settingsModal);
 }
 
@@ -490,14 +705,17 @@ async function saveSettings() {
   const minVol = $('settingMinVolume').value === '' ? null : parseInt($('settingMinVolume').value, 10);
   try {
     setBusy($('settingsSave'), true);
+    const birthW = $('settingBirthWeight').value === '' ? null : parseInt($('settingBirthWeight').value, 10);
     const patch = { feedingIntervalMin: feed };
     if (minDur !== null) patch.minFeedDurationMin = minDur;
     if (minVol !== null) patch.minBottleVolumeMl = minVol;
+    if (birthW !== null && !isNaN(birthW)) patch.birthWeightG = birthW;
     const data = await api('update-settings', { settings: patch });
     state.settings = Object.assign(state.settings, data.settings || {});
     saveCache();
     hideModal(settingsModal);
     render();
+    if (activeTab === 'weight') renderWeightTab();
   } catch (err) {
     showError($('settingsError'), err.message);
   } finally {

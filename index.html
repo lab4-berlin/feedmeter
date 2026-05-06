@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23f7c8d4'/%3E%3Ccircle cx='32' cy='28' r='10' fill='%23fff'/%3E%3Crect x='28' y='34' width='8' height='18' rx='4' fill='%23fff'/%3E%3C/svg%3E" />
   <link rel="apple-touch-icon" href="icon-192.svg" />
-  <link rel="stylesheet" href="styles.css?v=14" />
+  <link rel="stylesheet" href="styles.css?v=15" />
 </head>
 <body>
   <header class="app-header">
@@ -124,37 +124,58 @@
       </button>
     </section>
 
-    <!-- History -->
-    <section class="history">
-      <div class="history-head">
-        <h2>History</h2>
-        <div class="day-nav">
-          <button class="link-btn hidden" id="backToToday" type="button">Today</button>
-          <button class="day-step" id="dayPrev" type="button" aria-label="Previous day">
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <polyline points="15 18 9 12 15 6"/>
-            </svg>
-          </button>
-          <button class="day-pick" id="dayPick" type="button" aria-label="Pick a day">
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <rect x="3" y="4" width="18" height="18" rx="2"/>
-              <line x1="16" y1="2" x2="16" y2="6"/>
-              <line x1="8" y1="2" x2="8" y2="6"/>
-              <line x1="3" y1="10" x2="21" y2="10"/>
-            </svg>
-            <span id="dayLabel">Today</span>
-          </button>
-          <button class="day-step" id="dayNext" type="button" aria-label="Next day" disabled>
-            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-              <polyline points="9 18 15 12 9 6"/>
-            </svg>
-          </button>
-          <input type="date" id="dayInput" class="day-input-hidden" aria-hidden="true" tabindex="-1" />
+    <!-- Tab bar -->
+    <div class="tab-bar" role="tablist">
+      <button class="tab-btn active" data-tab="feedings" role="tab" type="button">Feedings</button>
+      <button class="tab-btn" data-tab="weight" role="tab" type="button">Weight</button>
+    </div>
+
+    <!-- Feedings tab -->
+    <div class="tab-panel" id="tabFeedings" role="tabpanel">
+      <section class="history">
+        <div class="history-head">
+          <h2>History</h2>
+          <div class="day-nav">
+            <button class="link-btn hidden" id="backToToday" type="button">Today</button>
+            <button class="day-step" id="dayPrev" type="button" aria-label="Previous day">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <polyline points="15 18 9 12 15 6"/>
+              </svg>
+            </button>
+            <button class="day-pick" id="dayPick" type="button" aria-label="Pick a day">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <rect x="3" y="4" width="18" height="18" rx="2"/>
+                <line x1="16" y1="2" x2="16" y2="6"/>
+                <line x1="8" y1="2" x2="8" y2="6"/>
+                <line x1="3" y1="10" x2="21" y2="10"/>
+              </svg>
+              <span id="dayLabel">Today</span>
+            </button>
+            <button class="day-step" id="dayNext" type="button" aria-label="Next day" disabled>
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <polyline points="9 18 15 12 9 6"/>
+              </svg>
+            </button>
+            <input type="date" id="dayInput" class="day-input-hidden" aria-hidden="true" tabindex="-1" />
+          </div>
         </div>
-      </div>
-      <ul class="entries" id="entries"></ul>
-      <p class="empty" id="emptyState">No entries yet. Tap a tile above to start.</p>
-    </section>
+        <ul class="entries" id="entries"></ul>
+        <p class="empty" id="emptyState">No entries yet. Tap a tile above to start.</p>
+      </section>
+    </div>
+
+    <!-- Weight tab -->
+    <div class="tab-panel hidden" id="tabWeight" role="tabpanel">
+      <section class="weight-section">
+        <div class="weight-head">
+          <h2>Weight</h2>
+          <button class="btn ghost btn-sm" id="logWeightBtn" type="button">+ Log</button>
+        </div>
+        <div id="weightChart" class="weight-chart-wrap"></div>
+        <ul class="weight-entries" id="weightEntries"></ul>
+        <p class="empty hidden" id="weightEmpty">No measurements yet. Tap + Log to start.</p>
+      </section>
+    </div>
   </main>
 
   <!-- Setup wizard: connect + pick name in one flow (first run) -->
@@ -254,6 +275,12 @@
         <p class="field-hint">Bottles below this amount will be flagged as possible comfort feeding.</p>
       </div>
 
+      <div class="field">
+        <label for="settingBirthWeight">Birth weight (g)</label>
+        <input id="settingBirthWeight" type="number" inputmode="numeric" min="500" max="6000" step="10" placeholder="e.g. 3200" />
+        <p class="field-hint">Shown as a reference line on the weight chart.</p>
+      </div>
+
       <div class="modal-error hidden" id="settingsError"></div>
 
       <div class="modal-actions space-between">
@@ -336,6 +363,41 @@
     </div>
   </div>
 
+  <!-- Weight modal -->
+  <div class="modal hidden" id="weightModal" role="dialog" aria-modal="true" aria-labelledby="weightModalTitle">
+    <div class="modal-card">
+      <h3 id="weightModalTitle">Log weight</h3>
+
+      <div class="field">
+        <label for="weightInput">Weight (g)</label>
+        <input id="weightInput" type="number" inputmode="numeric" min="500" max="15000" step="1" placeholder="e.g. 3520" />
+      </div>
+
+      <div class="field">
+        <label for="weightDate">Date</label>
+        <input id="weightDate" type="date" />
+      </div>
+
+      <div class="field">
+        <label>Timing</label>
+        <div class="seg" role="radiogroup" aria-label="Measurement timing">
+          <button type="button" class="seg-btn" data-wtiming="before">Before feed</button>
+          <button type="button" class="seg-btn active" data-wtiming="after">After feed</button>
+        </div>
+      </div>
+
+      <div class="modal-error hidden" id="weightError"></div>
+
+      <div class="modal-actions space-between">
+        <button class="btn danger hidden" id="deleteWeightBtn" type="button">Delete</button>
+        <div>
+          <button class="btn ghost" id="cancelWeightBtn" type="button">Cancel</button>
+          <button class="btn primary" id="saveWeightBtn" type="button">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Comfort feeding modal -->
   <div class="modal hidden" id="comfortModal" role="dialog" aria-modal="true" aria-labelledby="comfortTitle">
     <div class="modal-card">
@@ -361,6 +423,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=14"></script>
+  <script src="app.js?v=15"></script>
 </body>
 </html>

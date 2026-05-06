@@ -17,10 +17,12 @@
 
 const ENTRIES_SHEET = 'entries';
 const SETTINGS_SHEET = 'settings';
+const WEIGHT_SHEET = 'weight';
 const ENTRIES_HEADERS = [
   'id','createdAt','updatedAt','user','type',
   'start','end','durationSec','volumeMl','source','deleted','isComfort'
 ];
+const WEIGHT_HEADERS = ['id','createdAt','updatedAt','date','weightG','timing','deleted'];
 const SETTINGS_HEADERS = ['key','value'];
 
 function doGet(e) {
@@ -69,6 +71,9 @@ function doPost(e) {
       case 'update-settings': return jsonOutput_({ ok: true, settings: updateSettings_(body.settings) });
       case 'start-voice':     return jsonOutput_({ ok: true, entry: startVoice_(body.type, body.user) });
       case 'discard-open':    return jsonOutput_({ ok: true, id: deleteEntry_(body.id, body.user) });
+      case 'add-weight':      return jsonOutput_({ ok: true, weight: addWeight_(body.weight) });
+      case 'update-weight':   return jsonOutput_({ ok: true, weight: updateWeight_(body.weight) });
+      case 'delete-weight':   return jsonOutput_({ ok: true, id: deleteWeight_(body.id) });
       default:                return jsonOutput_({ ok: false, error: 'Unknown action: ' + action });
     }
   } catch (err) {
@@ -99,6 +104,7 @@ function getSheet_(name, headers) {
 
 function ensureInit_() {
   getSheet_(ENTRIES_SHEET, ENTRIES_HEADERS);
+  getSheet_(WEIGHT_SHEET, WEIGHT_HEADERS);
   const settings = getSheet_(SETTINGS_SHEET, SETTINGS_HEADERS);
   if (settings.getLastRow() < 2) {
     const defaults = [
@@ -130,6 +136,7 @@ function bootstrap_() {
     settings: readSettings_(),
     entries: listEntries_(),
     openEntry: findOpenEntry_(),
+    weights: listWeights_(),
   };
 }
 
@@ -314,6 +321,79 @@ function readSettings_() {
   }
   return out;
 }
+
+// ---------- weight ----------
+
+function listWeights_() {
+  const s = getSheet_(WEIGHT_SHEET, WEIGHT_HEADERS);
+  const data = s.getDataRange().getValues();
+  if (data.length < 2) return [];
+  return data.slice(1).map(rowToWeight_).filter(w => w && !w.deleted);
+}
+
+function rowToWeight_(r) {
+  if (!r[0]) return null;
+  return {
+    id: String(r[0]),
+    createdAt: r[1] instanceof Date ? r[1].toISOString() : (r[1] || null),
+    updatedAt: r[2] instanceof Date ? r[2].toISOString() : (r[2] || null),
+    date: String(r[3] || '').slice(0, 10),
+    weightG: r[4] ? Number(r[4]) : null,
+    timing: String(r[5] || 'after'),
+    deleted: r[6] === true || String(r[6]).toUpperCase() === 'TRUE',
+  };
+}
+
+function addWeight_(weight) {
+  if (!weight || !weight.weightG) throw new Error('Missing weight.weightG');
+  const s = getSheet_(WEIGHT_SHEET, WEIGHT_HEADERS);
+  const now = new Date();
+  const id = Utilities.getUuid();
+  const date = weight.date || todayStr_();
+  s.appendRow([id, now, now, date, Number(weight.weightG), weight.timing || 'after', false]);
+  return { id, createdAt: now.toISOString(), updatedAt: now.toISOString(),
+    date, weightG: Number(weight.weightG), timing: weight.timing || 'after', deleted: false };
+}
+
+function updateWeight_(weight) {
+  if (!weight || !weight.id) throw new Error('Missing weight.id');
+  const s = getSheet_(WEIGHT_SHEET, WEIGHT_HEADERS);
+  const row = findWeightRow_(s, weight.id);
+  if (row < 0) throw new Error('Weight not found: ' + weight.id);
+  const now = new Date();
+  const createdAt = s.getRange(row, 2).getValue() || now;
+  s.getRange(row, 1, 1, WEIGHT_HEADERS.length).setValues([[
+    weight.id, createdAt, now,
+    weight.date, Number(weight.weightG), weight.timing || 'after', false,
+  ]]);
+  return { id: weight.id,
+    createdAt: createdAt instanceof Date ? createdAt.toISOString() : String(createdAt),
+    updatedAt: now.toISOString(), date: weight.date,
+    weightG: Number(weight.weightG), timing: weight.timing || 'after', deleted: false };
+}
+
+function deleteWeight_(id) {
+  const s = getSheet_(WEIGHT_SHEET, WEIGHT_HEADERS);
+  const row = findWeightRow_(s, id);
+  if (row < 0) throw new Error('Weight not found: ' + id);
+  s.getRange(row, 7).setValue(true);
+  s.getRange(row, 3).setValue(new Date());
+  return id;
+}
+
+function findWeightRow_(sheet, id) {
+  const data = sheet.getDataRange().getValues();
+  for (let i = 1; i < data.length; i++) {
+    if (String(data[i][0]) === String(id)) return i + 1;
+  }
+  return -1;
+}
+
+function todayStr_() {
+  const d = new Date();
+  return `${d.getFullYear()}-${pad2_(d.getMonth()+1)}-${pad2_(d.getDate())}`;
+}
+function pad2_(n) { return n.toString().padStart(2, '0'); }
 
 function updateSettings_(patch) {
   ensureInit_();

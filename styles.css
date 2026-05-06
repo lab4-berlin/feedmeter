@@ -429,6 +429,90 @@ body {
 .pending-mark { color: var(--rose); font-weight: 600; }
 .needs-volume-hint { color: #c07a00; font-weight: 600; }
 .comfort-mark { color: #8b7ab8; font-weight: 600; }
+
+/* ---- Tab bar ---- */
+.tab-bar {
+  display: flex;
+  background: var(--surface);
+  border-radius: 14px;
+  padding: 4px;
+  margin: 4px 0 12px;
+  box-shadow: 0 1px 4px rgba(70,30,45,0.07);
+}
+.tab-btn {
+  flex: 1;
+  padding: 9px 8px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.tab-btn.active {
+  background: var(--bg);
+  color: var(--ink);
+  box-shadow: 0 1px 5px rgba(70,30,45,0.10);
+}
+.tab-panel { }
+
+/* ---- Weight section ---- */
+.weight-section { margin-top: 2px; }
+.weight-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.weight-head h2 { margin: 0; font-size: 18px; font-weight: 700; }
+.btn-sm { padding: 7px 14px; font-size: 13px; }
+
+.weight-chart-wrap { margin-bottom: 12px; }
+.weight-birth-only {
+  text-align: center;
+  color: var(--muted);
+  font-size: 14px;
+  padding: 16px 0;
+}
+
+/* ---- Weight SVG chart ---- */
+.weight-chart-svg { width: 100%; height: auto; display: block; overflow: visible; }
+.chart-grid { stroke: var(--line); stroke-width: 1; }
+.chart-line { stroke: var(--rose); stroke-width: 2.2; fill: none; stroke-linejoin: round; stroke-linecap: round; }
+.chart-dot { cursor: pointer; transition: r 0.1s; }
+.chart-dot:hover { r: 7; }
+.chart-dot-before { fill: #a8cbf5; stroke: #5a8fd4; stroke-width: 1.5; }
+.chart-dot-after  { fill: var(--rose); stroke: #c45c78; stroke-width: 1.5; }
+.chart-birth { stroke: #8b7ab8; stroke-width: 1.5; stroke-dasharray: 5 3; }
+.chart-label-x { font-size: 10px; fill: var(--muted); }
+.chart-label-y { font-size: 10px; fill: var(--muted); text-anchor: end; }
+.chart-label-birth { font-size: 10px; fill: #8b7ab8; }
+
+/* ---- Weight entries list ---- */
+.weight-entries { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.weight-entry {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 14px;
+  background: var(--surface);
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background 0.12s;
+}
+.weight-entry:active { background: var(--surface-2); }
+.weight-entry-date { flex: 1; font-size: 14px; color: var(--muted); }
+.weight-entry-val { font-size: 15px; font-weight: 700; color: var(--ink); }
+.weight-timing-tag {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 3px 7px;
+  border-radius: 8px;
+}
+.weight-timing-tag.before { background: #ddeeff; color: #3a6fa0; }
+.weight-timing-tag.after  { background: var(--surface-2); color: var(--plum); }
 .checkbox-label { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 14px; color: var(--ink); }
 .checkbox-label input[type="checkbox"] { width: 16px; height: 16px; accent-color: var(--rose); flex-shrink: 0; }
 
