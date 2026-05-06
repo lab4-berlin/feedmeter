@@ -286,12 +286,26 @@ body {
 }
 
 /* Next-breast suggestion */
+.next-arrow {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s;
+}
 .tile.is-next {
   border-color: currentColor;
   box-shadow: 0 0 0 2px currentColor inset, var(--shadow);
 }
-.tile.is-next .tile-name::after {
-  content: ' · next';
+.tile.is-next .next-arrow {
+  opacity: 0.7;
+  animation: next-bounce 1.3s ease-in-out infinite;
+}
+@keyframes next-bounce {
+  0%, 100% { transform: translateX(-50%) translateY(0); }
+  50%       { transform: translateX(-50%) translateY(4px); }
 }
 
 /* Stats */
