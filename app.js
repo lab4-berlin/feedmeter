@@ -7,6 +7,8 @@ const LS = {
   active: 'feedmeter.active.v2',   // current running session
 };
 
+const isAndroid = /Android/i.test(navigator.userAgent);
+
 // ----- Type metadata -----
 const TYPE_META = {
   left:   { title: 'Left breast',  short: 'Left',   needsVolume: false, needsSource: false, isFeed: true  },
@@ -774,6 +776,9 @@ async function confirmSave() {
   if (meta.needsVolume && (isNaN(volume) || volume < 0)) return flashField($('volumeInput'));
   if (meta.needsSource && !source) return flashField(stopModal.querySelector('.seg'));
 
+  const shouldSetAlarm = isAndroid && pendingSave.type === 'bottle' && $('alarmCheck').checked;
+  const alarmDueTs = pendingSave.start + (Number(state.settings.feedingIntervalMin) || 180) * 60 * 1000;
+
   const entry = {
     type: pendingSave.type,
     start: pendingSave.start,
@@ -795,6 +800,7 @@ async function confirmSave() {
 
   pendingSave = null;
   hideModal(stopModal);
+  if (shouldSetAlarm) setFeedingAlarm(alarmDueTs);
   await persistEntry({ ...entry, isComfort: false });
 }
 
@@ -963,6 +969,9 @@ function openSaveModal(session) {
   $('volumeField').classList.toggle('hidden', !meta.needsVolume);
   $('volumeInput').value = '';
   stopModal.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
+  const showAlarm = isAndroid && session.type === 'bottle';
+  $('alarmField').classList.toggle('hidden', !showAlarm);
+  if (showAlarm) $('alarmCheck').checked = true;
   showModal(stopModal);
   if (meta.needsVolume) setTimeout(() => $('volumeInput').focus(), 200);
 }
@@ -1320,6 +1329,19 @@ function entryIconSvg(type) {
   }
   // pump — wearable cup style (matches tile)
   return `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="12" rx="8" ry="9"/><ellipse cx="12" cy="10" rx="2.4" ry="1.4"/><circle cx="12" cy="18" r="0.8" fill="currentColor" stroke="none"/></svg>`;
+}
+
+function setFeedingAlarm(dueTs) {
+  const d = new Date(dueTs);
+  const hour = d.getHours();
+  const min = d.getMinutes();
+  const label = encodeURIComponent('Next feeding ' + formatClock(dueTs));
+  const uri = `intent:#Intent;action=android.intent.action.SET_ALARM;S.android.intent.extra.alarm.MESSAGE=${label};i.android.intent.extra.alarm.HOUR=${hour};i.android.intent.extra.alarm.MINUTES=${min};B.android.intent.extra.alarm.SKIP_UI=true;end`;
+  const a = document.createElement('a');
+  a.href = uri;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
 }
 
 function exportData() {
