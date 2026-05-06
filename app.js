@@ -1337,8 +1337,8 @@ function entryIconSvg(type) {
   if (type === 'bottle') {
     return `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="3" rx="1.4" ry="1.1"/><path d="M10 5h4"/><rect x="8.5" y="6" width="7" height="2" rx="0.5"/><path d="M9 9h6v9.5a2 2 0 0 1-2 2h-2a2 2 0 0 1-2-2z"/><line x1="11" y1="13" x2="13" y2="13" opacity="0.5"/><line x1="11" y1="16" x2="13" y2="16" opacity="0.5"/></svg>`;
   }
-  // pump — wearable cup style (matches tile)
-  return `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="12" rx="8" ry="9"/><ellipse cx="12" cy="10" rx="2.4" ry="1.4"/><circle cx="12" cy="18" r="0.8" fill="currentColor" stroke="none"/></svg>`;
+  // pump — tabletop machine style (body + handle + display + knob + tubes)
+  return `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="9.5" width="18" height="10" rx="2.5"/><path d="M7.5 9.5 V7.5 Q7.5 5.5 12 5.5 Q16.5 5.5 16.5 7.5 V9.5"/><rect x="4.5" y="11.5" width="7" height="3" rx="0.8"/><circle cx="16" cy="13.5" r="2"/><path d="M3 12 L1 11 M3 14.5 L1 15.5"/></svg>`;
 }
 
 function setFeedingAlarm(dueTs) {
