@@ -337,9 +337,7 @@ function rowToWeight_(r) {
     id: String(r[0]),
     createdAt: r[1] instanceof Date ? r[1].toISOString() : (r[1] || null),
     updatedAt: r[2] instanceof Date ? r[2].toISOString() : (r[2] || null),
-    date: r[3] instanceof Date
-      ? `${r[3].getFullYear()}-${pad2_(r[3].getMonth()+1)}-${pad2_(r[3].getDate())}`
-      : String(r[3] || '').slice(0, 10),
+    date: r[3] instanceof Date ? r[3].toISOString().slice(0, 10) : String(r[3] || '').slice(0, 10),
     weightG: r[4] ? Number(r[4]) : null,
     timing: String(r[5] || 'after'),
     deleted: r[6] === true || String(r[6]).toUpperCase() === 'TRUE',
