@@ -7,9 +7,6 @@ const LS = {
   active: 'feedmeter.active.v2',   // current running session
 };
 
-const isAndroid = /Android/i.test(navigator.userAgent);
-let alarmDue = parseInt(localStorage.getItem('feedmeter.alarmDue') || '0', 10);
-
 // ----- Type metadata -----
 const TYPE_META = {
   left:   { title: 'Left breast',  short: 'Left',   needsVolume: false, needsSource: false, isFeed: true  },
@@ -777,9 +774,6 @@ async function confirmSave() {
   if (meta.needsVolume && (isNaN(volume) || volume < 0)) return flashField($('volumeInput'));
   if (meta.needsSource && !source) return flashField(stopModal.querySelector('.seg'));
 
-  const shouldSetAlarm = isAndroid && pendingSave.type === 'bottle' && $('alarmCheck').checked;
-  const alarmDueTs = pendingSave.start + (Number(state.settings.feedingIntervalMin) || 180) * 60 * 1000;
-
   const entry = {
     type: pendingSave.type,
     start: pendingSave.start,
@@ -801,7 +795,6 @@ async function confirmSave() {
 
   pendingSave = null;
   hideModal(stopModal);
-  if (shouldSetAlarm) setFeedingAlarm(alarmDueTs);
   await persistEntry({ ...entry, isComfort: false });
 }
 
@@ -970,9 +963,6 @@ function openSaveModal(session) {
   $('volumeField').classList.toggle('hidden', !meta.needsVolume);
   $('volumeInput').value = '';
   stopModal.querySelectorAll('.seg-btn').forEach(b => b.classList.remove('active'));
-  const showAlarm = isAndroid && session.type === 'bottle';
-  $('alarmField').classList.toggle('hidden', !showAlarm);
-  if (showAlarm) $('alarmCheck').checked = true;
   showModal(stopModal);
   if (meta.needsVolume) setTimeout(() => $('volumeInput').focus(), 200);
 }
@@ -1191,9 +1181,6 @@ function tickMetrics() {
     $('statNext').classList.remove('overdue');
   }
 
-  // Alarm indicator — show bell while the set alarm is still in the future
-  $('alarmSetIcon').classList.toggle('hidden', !(alarmDue > now));
-
   // Breast alternation indicator
   grid.querySelectorAll('.tile[data-action="left"], .tile[data-action="right"]').forEach(t => t.classList.remove('is-next'));
   if (!active) {
@@ -1339,19 +1326,6 @@ function entryIconSvg(type) {
   }
   // pump — tabletop machine style (body + handle + display + knob + tubes)
   return `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="9.5" width="18" height="10" rx="2.5"/><path d="M7.5 9.5 V7.5 Q7.5 5.5 12 5.5 Q16.5 5.5 16.5 7.5 V9.5"/><rect x="4.5" y="11.5" width="7" height="3" rx="0.8"/><circle cx="16" cy="13.5" r="2"/><path d="M3 12 L1 11 M3 14.5 L1 15.5"/></svg>`;
-}
-
-function setFeedingAlarm(dueTs) {
-  const d = new Date(dueTs);
-  const hour = d.getHours();
-  const min = d.getMinutes();
-  const label = encodeURIComponent('Next feeding ' + formatClock(dueTs));
-  // No host in the URI = no data URI added to the intent, so Clock's action-only filter matches.
-  // SKIP_UI=false opens Clock with the time pre-filled; user taps once to save.
-  const uri = `intent:#Intent;action=android.intent.action.SET_ALARM;S.android.intent.extra.alarm.MESSAGE=${label};i.android.intent.extra.alarm.HOUR=${hour};i.android.intent.extra.alarm.MINUTES=${min};B.android.intent.extra.alarm.SKIP_UI=false;end`;
-  alarmDue = dueTs;
-  localStorage.setItem('feedmeter.alarmDue', dueTs);
-  window.location.href = uri;
 }
 
 function exportData() {
