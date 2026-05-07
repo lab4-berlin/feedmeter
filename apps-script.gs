@@ -167,13 +167,26 @@ function rowToEntry_(r) {
 function addEntry_(entry, user) {
   if (!entry || !entry.type) throw new Error('Missing entry.type');
   const s = getSheet_(ENTRIES_SHEET, ENTRIES_HEADERS);
+  // Idempotence: if a row with this client-supplied id already exists, return
+  // it as-is. Lets offline retries safely re-send the same create without
+  // creating duplicate rows.
+  if (entry.id) {
+    const existingRow = findRow_(s, entry.id);
+    if (existingRow > 0) {
+      const r = s.getRange(existingRow, 1, 1, ENTRIES_HEADERS.length).getValues()[0];
+      return rowToEntry_(r);
+    }
+  }
   const now = new Date();
   const id = entry.id || Utilities.getUuid();
   const start = entry.start ? new Date(entry.start) : null;
   const end   = entry.end   ? new Date(entry.end)   : null;
   const duration = (start && end) ? Math.max(0, Math.round((end - start) / 1000)) : null;
+  // entry.user wins over the body-level user so the original starter is kept
+  // when a different device finishes the entry later.
+  const userField = entry.user || user || 'Unknown';
   s.appendRow([
-    id, now, now, user || 'Unknown',
+    id, now, now, userField,
     entry.type, start, end, duration,
     entry.volume == null ? '' : Number(entry.volume),
     entry.source || '',
@@ -184,7 +197,7 @@ function addEntry_(entry, user) {
     id,
     createdAt: now.toISOString(),
     updatedAt: now.toISOString(),
-    user: user || 'Unknown',
+    user: userField,
     type: entry.type,
     start: start ? start.getTime() : null,
     end: end ? end.getTime() : null,
@@ -214,11 +227,15 @@ function updateEntry_(entry, user) {
   const start = entry.start ? new Date(entry.start) : null;
   const end   = entry.end   ? new Date(entry.end)   : null;
   const duration = (start && end) ? Math.max(0, Math.round((end - start) / 1000)) : null;
+  // Prefer entry.user (typically the original starter sent back by the client)
+  // over body.user (the device finishing the entry) so attribution stays with
+  // whoever started the session.
+  const userField = entry.user || user || s.getRange(row, 4).getValue();
   s.getRange(row, 1, 1, ENTRIES_HEADERS.length).setValues([[
     entry.id,
     createdAt,
     now,
-    user || s.getRange(row, 4).getValue(),
+    userField,
     entry.type,
     start, end, duration,
     entry.volume == null ? '' : Number(entry.volume),
@@ -230,7 +247,7 @@ function updateEntry_(entry, user) {
     id: entry.id,
     createdAt: createdAt instanceof Date ? createdAt.toISOString() : String(createdAt),
     updatedAt: now.toISOString(),
-    user: user || null,
+    user: userField,
     type: entry.type,
     start: start ? start.getTime() : null,
     end: end ? end.getTime() : null,

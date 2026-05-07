@@ -4,8 +4,11 @@ const LS = {
   passcode: 'feedmeter.passcode',
   user: 'feedmeter.user',
   cache: 'feedmeter.cache.v2',     // entries + settings + users
-  active: 'feedmeter.active.v2',   // current running session
+  active: 'feedmeter.active.v2',   // legacy: pre-sync local-only running session
 };
+
+// How often to re-fetch state while the tab is visible (active sessions sync).
+const POLL_INTERVAL_MS = 30 * 1000;
 
 // ----- Type metadata -----
 const TYPE_META = {
@@ -44,12 +47,14 @@ let state = {
 };
 let activeTab = 'feedings';
 let editingWeightId = null;
-let active = loadActive();
 let pendingSave = null;
 let editingId = null;
 let pendingComfort = null;  // entry held for comfort-feeding prompt
+let pendingConflictNewType = null; // pending start type while conflict modal is open
+let activeCreatePromise = null; // in-flight add-entry for the active session
 let tickHandle = null;
 let metricsHandle = null;
+let pollHandle = null;
 
 // Try to hydrate from local cache (snappy first paint, even offline)
 try {
@@ -63,6 +68,31 @@ try {
     }
   }
 } catch {}
+
+// One-time migration from the old local-only `active` storage to a real
+// entry that lives in `state.entries` (and will be pushed to the server on
+// the next bootstrap).
+try {
+  const legacy = JSON.parse(localStorage.getItem(LS.active) || 'null');
+  if (legacy && legacy.type && legacy.start) {
+    state.entries.push({
+      id: cryptoId(),
+      type: legacy.type,
+      start: legacy.start,
+      end: null,
+      user: state.user || null,
+      volume: null,
+      source: null,
+      isComfort: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      pending: true,
+      _pendingCreate: true,
+    });
+    saveCache();
+  }
+} catch {}
+localStorage.removeItem(LS.active);
 
 // ----- Boot -----
 init();
@@ -79,26 +109,29 @@ async function init() {
     await bootstrap();
   } catch (err) {
     flashSync('Cannot reach sheet: ' + err.message, 'error');
-    return;
   }
   if (!state.user) {
     openSetup({ step: 'name' });
   }
-  if (active) startTick();
+  if (getActiveEntry()) startTick();
   startMetricsTick();
+  startPoll();
 }
 
 // ----- Event wiring -----
 function bindEvents() {
-  // Tile click: start or stop
+  // Tile click: tap the running tile to stop, tap any other tile to start
+  // (which may open the conflict modal if a session is already running).
   grid.addEventListener('click', (e) => {
     const tile = e.target.closest('.tile');
-    if (!tile || tile.classList.contains('disabled')) return;
-    if (tile.classList.contains('is-active')) {
+    if (!tile) return;
+    const action = tile.dataset.action;
+    const activeEntry = getActiveEntry();
+    if (activeEntry && activeEntry.type === action) {
       stopSession();
     } else {
       if (!ensureReady()) return;
-      startSession(tile.dataset.action);
+      startSession(action);
     }
   });
 
@@ -199,6 +232,20 @@ function bindEvents() {
     if (e.target === formulaLimitModal) hideModal(formulaLimitModal); // backdrop = cancel
   });
 
+  // Active session conflict modal
+  $('conflictContinue').addEventListener('click', () => {
+    pendingConflictNewType = null;
+    hideModal($('activeConflictModal'));
+  });
+  $('conflictStopStart').addEventListener('click', () => onConflictResolve('stop'));
+  $('conflictDiscardStart').addEventListener('click', () => onConflictResolve('discard'));
+  $('activeConflictModal').addEventListener('click', (e) => {
+    if (e.target === $('activeConflictModal')) {
+      pendingConflictNewType = null;
+      hideModal($('activeConflictModal'));
+    }
+  });
+
   // Backdrop close
   [stopModal, editModal, settingsModal, userModal].forEach(m => {
     m.addEventListener('click', (e) => {
@@ -212,7 +259,7 @@ function bindEvents() {
 
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) {
-      if (active) tickNow();
+      if (getActiveEntry()) tickNow();
       tickMetrics();
       if (state.apiUrl && state.passcode) bootstrap().catch(() => {});
     }
@@ -246,14 +293,50 @@ async function api(action, payload = {}) {
 
 async function bootstrap() {
   const data = await api('bootstrap');
-  state.entries = data.entries || [];
+  // Preserve local pending entries (start not yet ack'd by the server) so
+  // that a slow or failed network round-trip doesn't drop the live session.
+  const pendingById = {};
+  for (const e of state.entries) {
+    if (e.pending || e._pendingCreate) pendingById[e.id] = e;
+  }
+  state.entries = (data.entries || []).map(e => ({ ...e, pending: false }));
+  for (const id of Object.keys(pendingById)) {
+    if (!state.entries.some(e => e.id === id)) state.entries.push(pendingById[id]);
+  }
   state.users = data.users || [];
   state.weights = data.weights || [];
   state.settings = Object.assign({ feedingIntervalMin: 180 }, data.settings || {});
   saveCache();
   render();
   if (activeTab === 'weight') renderWeightTab();
+  // Best-effort: re-push any entries whose original add-entry never landed.
+  retryPendingCreates();
   return data;
+}
+
+async function retryPendingCreates() {
+  const pending = state.entries.filter(e => e._pendingCreate);
+  if (!pending.length) return;
+  for (const e of pending) {
+    try {
+      const data = await api('add-entry', { entry: stripLocalFlags(e) });
+      const i = state.entries.findIndex(x => x.id === data.entry.id);
+      if (i >= 0) state.entries[i] = { ...data.entry, pending: false };
+    } catch {
+      // still offline / server error; will retry on next bootstrap
+    }
+  }
+  saveCache();
+  render();
+}
+
+function stripLocalFlags(e) {
+  const out = {};
+  for (const k of Object.keys(e)) {
+    if (k === 'pending' || k === '_pendingCreate') continue;
+    out[k] = e[k];
+  }
+  return out;
 }
 
 function saveCache() {
@@ -655,21 +738,73 @@ async function saveSettings() {
 
 // ----- Sessions -----
 
+// Active session = the most recent non-deleted entry that has no end yet.
+// Source of truth is `state.entries` (synced via bootstrap), so all devices
+// agree on whether a session is currently running.
+function getActiveEntry() {
+  let best = null;
+  for (const e of state.entries) {
+    if (e.deleted) continue;
+    if (e.end != null) continue;
+    if (!best || (e.start || 0) > (best.start || 0)) best = e;
+  }
+  return best;
+}
+
 function startSession(type) {
-  if (active) return;
   if (type === 'bottle' && shouldWarnFormulaLimit()) {
     openFormulaLimitWarning();
+    return;
+  }
+  const conflict = getActiveEntry();
+  if (conflict) {
+    openActiveConflictModal(conflict, type);
     return;
   }
   beginSession(type);
 }
 
+// Optimistically create the active entry locally and push to the server in
+// the background. Stop/complete will await the in-flight create so it can
+// safely call update-entry once the row exists, or fall back to add-entry
+// if the original create never landed.
 function beginSession(type) {
-  if (active) return;
-  active = { type, start: Date.now() };
-  saveActive();
+  if (getActiveEntry()) return;
+  const id = cryptoId();
+  const start = Date.now();
+  const nowIso = new Date().toISOString();
+  const entry = {
+    id,
+    type,
+    start,
+    end: null,
+    user: state.user || null,
+    volume: null,
+    source: null,
+    isComfort: false,
+    createdAt: nowIso,
+    updatedAt: nowIso,
+    pending: true,
+    _pendingCreate: true,
+  };
+  state.entries.push(entry);
+  saveCache();
   startTick();
   render();
+
+  activeCreatePromise = (async () => {
+    try {
+      const data = await api('add-entry', { entry: stripLocalFlags(entry) });
+      const i = state.entries.findIndex(x => x.id === id);
+      if (i >= 0) state.entries[i] = { ...data.entry, pending: false };
+      saveCache();
+      render();
+    } catch (err) {
+      flashSync('Start kept locally: ' + err.message, 'error');
+    } finally {
+      activeCreatePromise = null;
+    }
+  })();
 }
 
 function todayFormulaMl() {
@@ -699,36 +834,67 @@ function openFormulaLimitWarning() {
   showModal(formulaLimitModal);
 }
 
-async function stopSession() {
-  if (!active) return;
-  const session = { ...active, end: Date.now() };
-  active = null;
-  saveActive();
-  stopTick();
-  render();
+function openActiveConflictModal(activeEntry, newType) {
+  pendingConflictNewType = newType;
+  const meta = TYPE_META[activeEntry.type] || { title: activeEntry.type };
+  const newMeta = TYPE_META[newType] || { title: newType };
+  const dur = formatDuration(Date.now() - (activeEntry.start || Date.now()));
+  const who = activeEntry.user && activeEntry.user !== state.user
+    ? ` by ${activeEntry.user}`
+    : '';
+  $('conflictMsg').textContent =
+    `${meta.title} is running${who} — ${dur} so far. To start ${newMeta.title.toLowerCase()}, choose what to do with the running session.`;
+  showModal($('activeConflictModal'));
+}
 
-  const meta = TYPE_META[session.type];
+async function onConflictResolve(action) {
+  const newType = pendingConflictNewType;
+  pendingConflictNewType = null;
+  hideModal($('activeConflictModal'));
+  if (!newType) return;
+  const activeEntry = getActiveEntry();
+  if (activeEntry) {
+    if (activeCreatePromise) { try { await activeCreatePromise; } catch {} }
+    if (action === 'stop') {
+      // Save as-is: keep whatever volume/source the entry already has, just
+      // close it with end=now. Bottle/pump entries closed this way get no
+      // volume prompt — the user can edit later from history.
+      await completeEntry({ ...activeEntry, end: Date.now() });
+    } else if (action === 'discard') {
+      await discardActiveEntry(activeEntry);
+    }
+  }
+  beginSession(newType);
+}
+
+async function stopSession() {
+  // Guard against re-entry: a modal-driven stop is already in flight, so a
+  // second tap on the still-active tile would just open another modal.
+  if (pendingSave || pendingComfort) return;
+  const activeEntry = getActiveEntry();
+  if (!activeEntry) return;
+  if (activeCreatePromise) { try { await activeCreatePromise; } catch {} }
+  const end = Date.now();
+  const meta = TYPE_META[activeEntry.type];
+
   if (!meta.needsVolume && !meta.needsSource) {
-    // Breast: check duration threshold before persisting
-    const durationSec = (session.end - session.start) / 1000;
+    const durationSec = (end - activeEntry.start) / 1000;
     const minDurationSec = (Number(state.settings.minFeedDurationMin) || 0) * 60;
     if (meta.isFeed && minDurationSec > 0 && durationSec < minDurationSec) {
-      pendingComfort = { type: session.type, start: session.start, end: session.end, volume: null, source: null };
-      openComfortModal(`${meta.title} · ${formatDuration(session.end - session.start)}`);
+      pendingComfort = { ...activeEntry, end, volume: null, source: null };
+      // Pre-emptively stop the local timer so the tile reflects "stopped";
+      // the entry stays without an end until comfort is resolved.
+      stopTick();
+      openComfortModal(`${meta.title} · ${formatDuration(end - activeEntry.start)}`);
       return;
     }
-    await persistEntry({
-      type: session.type,
-      start: session.start,
-      end: session.end,
-      volume: null,
-      source: null,
-      isComfort: false,
-    });
+    await completeEntry({ ...activeEntry, end, isComfort: false });
     return;
   }
-  pendingSave = session;
-  openSaveModal(session);
+
+  pendingSave = { ...activeEntry, end };
+  stopTick();
+  openSaveModal(pendingSave);
 }
 
 async function confirmSave() {
@@ -740,9 +906,7 @@ async function confirmSave() {
   if (meta.needsSource && !source) return flashField(stopModal.querySelector('.seg'));
 
   const entry = {
-    type: pendingSave.type,
-    start: pendingSave.start,
-    end: pendingSave.end,
+    ...pendingSave,
     volume: meta.needsVolume ? volume : null,
     source: meta.needsSource ? source : null,
   };
@@ -759,34 +923,28 @@ async function confirmSave() {
 
   pendingSave = null;
   hideModal(stopModal);
-  await persistEntry({ ...entry, isComfort: false });
+  await completeEntry({ ...entry, isComfort: false });
 }
 
-async function persistEntry(entry) {
-  const tempId = 'tmp-' + cryptoId();
-  const now = new Date().toISOString();
-  const optimistic = {
-    id: tempId,
-    type: entry.type,
-    start: entry.start,
-    end: entry.end,
-    volume: entry.volume,
-    source: entry.source,
-    isComfort: !!entry.isComfort,
-    user: state.user,
-    createdAt: now,
-    updatedAt: now,
-    pending: true,
-  };
-  state.entries.push(optimistic);
+// Optimistically apply local changes, then sync. If the server never saw
+// this entry before (still _pendingCreate), use add-entry to create+complete
+// in one go; otherwise update the existing row.
+async function completeEntry(entry) {
+  const idx = state.entries.findIndex(e => e.id === entry.id);
+  const prev = idx >= 0 ? state.entries[idx] : null;
+  const merged = { ...(prev || {}), ...entry, pending: true };
+  if (idx >= 0) state.entries[idx] = merged;
+  else state.entries.push(merged);
+  stopTick();
   saveCache();
   render();
 
+  const useCreate = !!(prev && prev._pendingCreate);
   try {
-    const data = await api('add-entry', { entry });
-    const saved = data.entry;
-    const idx = state.entries.findIndex(e => e.id === tempId);
-    if (idx >= 0) state.entries[idx] = saved;
+    const action = useCreate ? 'add-entry' : 'update-entry';
+    const data = await api(action, { entry: stripLocalFlags(merged) });
+    const i = state.entries.findIndex(e => e.id === data.entry.id);
+    if (i >= 0) state.entries[i] = { ...data.entry, pending: false };
     saveCache();
     render();
     flashSync('Saved', 'ok');
@@ -795,15 +953,41 @@ async function persistEntry(entry) {
   }
 }
 
+async function discardActiveEntry(activeEntry) {
+  const id = activeEntry.id;
+  const wasOnServer = !activeEntry._pendingCreate;
+  state.entries = state.entries.filter(e => e.id !== id);
+  stopTick();
+  saveCache();
+  render();
+  if (!wasOnServer) return;
+  try {
+    await api('delete-entry', { id });
+  } catch (err) {
+    flashSync('Could not sync discard: ' + err.message, 'error');
+  }
+}
+
 function startTick() { stopTick(); tickNow(); tickHandle = setInterval(tickNow, 1000); }
 function stopTick() { if (tickHandle) { clearInterval(tickHandle); tickHandle = null; } }
 function tickNow() {
-  if (!active) return;
-  const elapsed = Date.now() - active.start;
+  const a = getActiveEntry();
+  if (!a) { stopTick(); return; }
+  const elapsed = Date.now() - a.start;
   const text = formatDuration(elapsed);
-  const tile = grid.querySelector(`.tile[data-action="${active.type}"]`);
+  const tile = grid.querySelector(`.tile[data-action="${a.type}"]`);
   if (tile) tile.querySelector('.live-timer').textContent = text;
 }
+
+function startPoll() {
+  stopPoll();
+  pollHandle = setInterval(() => {
+    if (document.hidden) return;
+    if (!state.apiUrl || !state.passcode) return;
+    bootstrap().catch(() => {});
+  }, POLL_INTERVAL_MS);
+}
+function stopPoll() { if (pollHandle) { clearInterval(pollHandle); pollHandle = null; } }
 
 // ----- Edit modal -----
 
@@ -834,8 +1018,12 @@ async function confirmEdit() {
   const e = state.entries[idx];
   const meta = TYPE_META[e.type];
   const startMs = new Date($('editStart').value).getTime();
-  const endMs = new Date($('editEnd').value).getTime();
-  if (isNaN(startMs) || isNaN(endMs) || endMs < startMs) return flashField($('editEnd'));
+  // Allow saving with no end (keeps the entry as an active session). When
+  // an end is provided it must come after the start.
+  const rawEnd = $('editEnd').value;
+  const endMs = rawEnd ? new Date(rawEnd).getTime() : null;
+  if (isNaN(startMs)) return flashField($('editStart'));
+  if (endMs !== null && (isNaN(endMs) || endMs < startMs)) return flashField($('editEnd'));
 
   const next = {
     ...e,
@@ -851,10 +1039,11 @@ async function confirmEdit() {
   render();
 
   try {
-    const data = await api('update-entry', { entry: next });
+    const action = e._pendingCreate ? 'add-entry' : 'update-entry';
+    const data = await api(action, { entry: stripLocalFlags(next) });
     const saved = data.entry;
     const i2 = state.entries.findIndex(x => x.id === saved.id);
-    if (i2 >= 0) state.entries[i2] = saved;
+    if (i2 >= 0) state.entries[i2] = { ...saved, pending: false };
     saveCache();
     render();
     flashSync('Updated', 'ok');
@@ -869,11 +1058,17 @@ async function confirmDelete() {
   if (!editingId) return;
   if (!confirm('Delete this entry?')) return;
   const id = editingId;
+  const target = state.entries.find(e => e.id === id);
   state.entries = state.entries.filter(e => e.id !== id);
   saveCache();
   hideModal(editModal);
   editingId = null;
   render();
+  // Skip the server delete if the entry was never persisted there.
+  if (target && target._pendingCreate) {
+    flashSync('Deleted', 'ok');
+    return;
+  }
   try {
     await api('delete-entry', { id });
     flashSync('Deleted', 'ok');
@@ -894,7 +1089,7 @@ async function resolveComfort(isComfort) {
   const entry = { ...pendingComfort, isComfort };
   pendingComfort = null;
   hideModal(comfortModal);
-  await persistEntry(entry);
+  await completeEntry(entry);
 }
 
 function openSaveModal(session) {
@@ -942,18 +1137,22 @@ function render() {
     userChip.classList.add('hidden');
   }
 
-  // Tile state
+  // Tile state. Other tiles are NOT disabled while a session is running —
+  // tapping them opens the conflict modal so the user can choose how to
+  // hand off (continue / stop & start / discard & start).
   grid.querySelectorAll('.tile').forEach(t => {
     t.classList.remove('is-active', 'disabled');
     const tm = t.querySelector('.live-timer');
     if (tm) tm.textContent = '00:00';
   });
-  if (active) {
-    grid.querySelectorAll('.tile').forEach(t => {
-      if (t.dataset.action === active.type) t.classList.add('is-active');
-      else t.classList.add('disabled');
-    });
+  const activeEntry = getActiveEntry();
+  if (activeEntry) {
+    const tile = grid.querySelector(`.tile[data-action="${activeEntry.type}"]`);
+    if (tile) tile.classList.add('is-active');
+    if (!tickHandle) startTick();
     tickNow();
+  } else if (tickHandle) {
+    stopTick();
   }
 
   renderEntries();
@@ -1064,13 +1263,15 @@ function renderEntry(e) {
 
   const metaRow = document.createElement('div');
   metaRow.className = 'entry-meta';
-  const dur = (e.start && e.end) ? formatDuration(e.end - e.start) : '—';
+  const isLive = e.start && e.end == null && !e.deleted;
+  const dur = (e.start && e.end) ? formatDuration(e.end - e.start) : (isLive ? formatDuration(Date.now() - e.start) : '—');
   const needsVolume = (e.type === 'bottle' || e.type === 'pump') && e.volume == null && e.end != null;
   metaRow.innerHTML = `
     <span>${formatTimeRange(e.start, e.end)}</span>
     <span class="dot">•</span>
     <span>${dur}</span>
     ${e.user ? `<span class="dot">•</span><span>${escapeHtml(e.user)}</span>` : ''}
+    ${isLive ? `<span class="dot">•</span><span class="live-mark">live</span>` : ''}
     ${e.pending ? `<span class="dot">•</span><span class="pending-mark">syncing…</span>` : ''}
     ${needsVolume ? `<span class="dot">•</span><span class="needs-volume-hint">add volume</span>` : ''}
     ${e.isComfort ? `<span class="dot">•</span><span class="comfort-mark">comfort</span>` : ''}
@@ -1127,7 +1328,7 @@ function tickMetrics() {
 
   // Breast alternation indicator
   grid.querySelectorAll('.tile[data-action="left"], .tile[data-action="right"]').forEach(t => t.classList.remove('is-next'));
-  if (!active) {
+  if (!getActiveEntry()) {
     const lastBreast = state.entries
       .filter(e => (e.type === 'left' || e.type === 'right') && e.end && !e.isComfort)
       .sort((a, b) => (b.start || 0) - (a.start || 0))[0];
@@ -1159,8 +1360,10 @@ function tickMetrics() {
     }
   }
   // Include the currently running breast session (if any) in today's total
-  if (active && (active.type === 'left' || active.type === 'right') && active.start >= todayStart) {
-    breastMs += now - active.start;
+  const runningEntry = getActiveEntry();
+  if (runningEntry && (runningEntry.type === 'left' || runningEntry.type === 'right') && runningEntry.start >= todayStart) {
+    // The entry is also in state.entries; only add the still-unclosed gap.
+    breastMs += now - runningEntry.start;
   }
 
   $('statTodayFeed').textContent = `${feedCount}×`;
@@ -1202,15 +1405,6 @@ function formatRel(ms) {
 }
 
 // ----- Utils -----
-
-function loadActive() {
-  try { return JSON.parse(localStorage.getItem(LS.active)); }
-  catch { return null; }
-}
-function saveActive() {
-  if (active) localStorage.setItem(LS.active, JSON.stringify(active));
-  else localStorage.removeItem(LS.active);
-}
 
 function cryptoId() {
   if (crypto?.randomUUID) return crypto.randomUUID();

@@ -517,6 +517,7 @@ body {
 .pending-mark { color: var(--rose); font-weight: 600; }
 .needs-volume-hint { color: #c07a00; font-weight: 600; }
 .comfort-mark { color: #8b7ab8; font-weight: 600; }
+.live-mark { color: var(--danger); font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; font-size: 11px; }
 
 /* ---- Tab bar ---- */
 .tab-bar {
@@ -773,6 +774,12 @@ body {
   margin-top: 6px;
 }
 .modal-actions.space-between { justify-content: space-between; }
+.modal-actions.stack {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+}
+.modal-actions.stack > .btn { text-align: center; }
 .modal-actions > div { display: flex; gap: 8px; }
 
 .btn {
