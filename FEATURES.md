@@ -5,53 +5,6 @@ implementation-agnostic — the *what* and *why*, not the *how*.
 
 ---
 
-## 1. Restructure top stats
-
-**Why.** The current top-of-screen metrics fit too much information into a
-single row of small cards. We want to give feeding and pumping their own
-visual blocks and surface a few extra numbers that are useful at a glance
-(absolute time of next feeding, breakdown of today's feeds and bottle volume).
-
-**What the user should see.**
-
-The metrics area becomes two rows:
-
-**Row 1 — status (two side-by-side blocks)**
-
-- *Feeding block* (left)
-  - Last feeding (relative time, e.g. "19m ago")
-  - Next feeding (relative + **absolute clock time**, e.g. "in 2h 31m · 14:30")
-
-- *Pumping block* (right)
-  - Last pumping (relative time)
-  - Total pumped volume today
-  - No "next pumping" — pumping has no schedule
-
-**Row 2 — today's feeding details (three cells)**
-
-- *Feeds today (count)*
-  - Total count, **excluding comfort feedings**
-  - Broken down into breast vs bottle, e.g. "5× · 3 breast · 2 bottle"
-
-- *Bottle ml today*
-  - Total ml from bottles
-  - Broken down into "own milk" vs "formula", e.g. "150 ml · 100 own · 50 formula"
-
-- *Breast time today*
-  - Total minutes spent on the breast (left + right combined)
-
-**Notes.**
-
-- A "feed" in row 2 means any non-comfort breast or bottle entry. Pumping is
-  not a feed.
-- Bottle source breakdown only counts bottles with a chosen source. Bottles
-  with no source recorded should still contribute to the total volume.
-- Layout should stay readable on a narrow phone screen — if a sub-breakdown
-  would overflow, dropping the breakdown (showing only the headline number)
-  is acceptable.
-
----
-
 ## 2. Daily formula limit warning
 
 **Why.** When supplementing breastfeeding with formula, parents often want to
@@ -235,3 +188,12 @@ feed, not two fresh ones.
   the later one** — that is, the actual idle time the baby spent not
   feeding.
 - If the setting is unset/zero, behaviour is identical to today's.
+
+---
+
+# Done
+
+- **1. Restructure top stats** (commit `4efc5ef`, 2026-05-07) — split the
+  top metrics into a feeding/pumping status row plus a today-details row
+  with feed-count, bottle-ml and breast-minutes breakdowns; "Next feeding"
+  now also shows the absolute clock time.
