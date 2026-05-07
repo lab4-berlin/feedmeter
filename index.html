@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23f7c8d4'/%3E%3Ccircle cx='32' cy='28' r='10' fill='%23fff'/%3E%3Crect x='28' y='34' width='8' height='18' rx='4' fill='%23fff'/%3E%3C/svg%3E" />
   <link rel="apple-touch-icon" href="icon-192.svg" />
-  <link rel="stylesheet" href="styles.css?v=23" />
+  <link rel="stylesheet" href="styles.css?v=24" />
 </head>
 <body>
   <header class="app-header">
@@ -302,6 +302,12 @@
       </div>
 
       <div class="field">
+        <label for="settingFormulaLimit">Daily formula limit (ml)</label>
+        <input id="settingFormulaLimit" type="number" inputmode="numeric" min="0" max="2000" step="10" placeholder="empty = no limit" />
+        <p class="field-hint">Optional. When today's formula intake is already at or above this, you'll get a warning before starting a new bottle.</p>
+      </div>
+
+      <div class="field">
         <label for="settingBirthWeight">Birth weight (g)</label>
         <input id="settingBirthWeight" type="number" inputmode="numeric" min="500" max="6000" step="10" placeholder="e.g. 3200" />
         <p class="field-hint">Shown as a reference line on the weight chart.</p>
@@ -437,6 +443,19 @@
     </div>
   </div>
 
-  <script src="app.js?v=24"></script>
+  <!-- Formula limit warning modal -->
+  <div class="modal hidden" id="formulaLimitModal" role="dialog" aria-modal="true" aria-labelledby="formulaLimitTitle">
+    <div class="modal-card">
+      <h3 id="formulaLimitTitle">Formula limit reached</h3>
+      <p class="modal-sub" id="formulaLimitMsg"></p>
+      <p class="field-hint">If this bottle is formula, it will be over the limit. You can still start it.</p>
+      <div class="modal-actions space-between">
+        <button class="btn ghost" id="formulaLimitCancel" type="button">Cancel</button>
+        <button class="btn primary" id="formulaLimitOk" type="button">OK, start bottle</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js?v=25"></script>
 </body>
 </html>

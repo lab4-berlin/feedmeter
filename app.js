@@ -27,6 +27,7 @@ const userModal = $('userModal');
 const settingsModal = $('settingsModal');
 const comfortModal = $('comfortModal');
 const weightModal = $('weightModal');
+const formulaLimitModal = $('formulaLimitModal');
 const syncBanner = $('syncBanner');
 const userChip = $('userChip');
 
@@ -186,6 +187,16 @@ function bindEvents() {
   $('comfortOnlyBtn').addEventListener('click', () => resolveComfort(true));
   comfortModal.addEventListener('click', (e) => {
     if (e.target === comfortModal) resolveComfort(false); // backdrop = real feeding
+  });
+
+  // Formula limit warning modal
+  $('formulaLimitOk').addEventListener('click', () => {
+    hideModal(formulaLimitModal);
+    beginSession('bottle');
+  });
+  $('formulaLimitCancel').addEventListener('click', () => hideModal(formulaLimitModal));
+  formulaLimitModal.addEventListener('click', (e) => {
+    if (e.target === formulaLimitModal) hideModal(formulaLimitModal); // backdrop = cancel
   });
 
   // Backdrop close
@@ -608,6 +619,7 @@ function openSettings() {
   $('settingFeed').value = state.settings.feedingIntervalMin || '';
   $('settingMinDuration').value = state.settings.minFeedDurationMin ?? '';
   $('settingMinVolume').value = state.settings.minBottleVolumeMl ?? '';
+  $('settingFormulaLimit').value = state.settings.dailyFormulaLimitMl || '';
   $('settingBirthWeight').value = state.settings.birthWeightG || '';
   showModal(settingsModal);
 }
@@ -618,10 +630,13 @@ async function saveSettings() {
   if (isNaN(feed) || feed < 30) return showError($('settingsError'), 'Feeding interval must be ≥ 30');
   const minDur = $('settingMinDuration').value === '' ? null : parseInt($('settingMinDuration').value, 10);
   const minVol = $('settingMinVolume').value === '' ? null : parseInt($('settingMinVolume').value, 10);
+  // Empty input persists 0 (= no limit) so the user can actually clear it.
+  const formulaLimitRaw = $('settingFormulaLimit').value;
+  const formulaLimit = formulaLimitRaw === '' ? 0 : Math.max(0, parseInt(formulaLimitRaw, 10) || 0);
   try {
     setBusy($('settingsSave'), true);
     const birthW = $('settingBirthWeight').value === '' ? null : parseInt($('settingBirthWeight').value, 10);
-    const patch = { feedingIntervalMin: feed };
+    const patch = { feedingIntervalMin: feed, dailyFormulaLimitMl: formulaLimit };
     if (minDur !== null) patch.minFeedDurationMin = minDur;
     if (minVol !== null) patch.minBottleVolumeMl = minVol;
     if (birthW !== null && !isNaN(birthW)) patch.birthWeightG = birthW;
@@ -642,10 +657,46 @@ async function saveSettings() {
 
 function startSession(type) {
   if (active) return;
+  if (type === 'bottle' && shouldWarnFormulaLimit()) {
+    openFormulaLimitWarning();
+    return;
+  }
+  beginSession(type);
+}
+
+function beginSession(type) {
+  if (active) return;
   active = { type, start: Date.now() };
   saveActive();
   startTick();
   render();
+}
+
+function todayFormulaMl() {
+  const todayStart = (() => { const d = new Date(); d.setHours(0,0,0,0); return d.getTime(); })();
+  let total = 0;
+  for (const e of state.entries) {
+    if (e.type !== 'bottle') continue;
+    if (e.isComfort) continue;
+    if (e.source !== 'formula') continue;
+    if ((e.start || 0) < todayStart) continue;
+    if (e.volume) total += e.volume;
+  }
+  return total;
+}
+
+function shouldWarnFormulaLimit() {
+  const limit = Number(state.settings.dailyFormulaLimitMl) || 0;
+  if (limit <= 0) return false;
+  return todayFormulaMl() >= limit;
+}
+
+function openFormulaLimitWarning() {
+  const limit = Number(state.settings.dailyFormulaLimitMl) || 0;
+  const current = todayFormulaMl();
+  $('formulaLimitMsg').textContent =
+    `Today's formula is already at the daily limit (${current} ml of ${limit} ml).`;
+  showModal(formulaLimitModal);
 }
 
 async function stopSession() {
