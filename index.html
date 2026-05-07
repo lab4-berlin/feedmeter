@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23f7c8d4'/%3E%3Ccircle cx='32' cy='28' r='10' fill='%23fff'/%3E%3Crect x='28' y='34' width='8' height='18' rx='4' fill='%23fff'/%3E%3C/svg%3E" />
   <link rel="apple-touch-icon" href="icon-192.svg" />
-  <link rel="stylesheet" href="styles.css?v=22" />
+  <link rel="stylesheet" href="styles.css?v=23" />
 </head>
 <body>
   <header class="app-header">
@@ -34,30 +34,47 @@
   <div class="sync-banner hidden" id="syncBanner" role="status"></div>
 
   <main class="container" id="appMain">
-    <!-- Top metrics: feeding -->
+    <!-- Row 1: status blocks (feeding + pumping) -->
+    <section class="status-row">
+      <div class="status-block">
+        <h3 class="status-block-title">Feeding</h3>
+        <div class="status-line">
+          <span class="status-line-label">Last</span>
+          <span class="status-line-value" id="statLast">—</span>
+        </div>
+        <div class="status-line">
+          <span class="status-line-label">Next</span>
+          <span class="status-line-value" id="statNext">—</span>
+        </div>
+      </div>
+      <div class="status-block">
+        <h3 class="status-block-title">Pumping</h3>
+        <div class="status-line">
+          <span class="status-line-label">Last</span>
+          <span class="status-line-value" id="statLastPump">—</span>
+        </div>
+        <div class="status-line">
+          <span class="status-line-label">Today</span>
+          <span class="status-line-value" id="statTodayPump">—</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Row 2: today's feeding details -->
     <section class="stats cols-3">
-      <div class="stat">
-        <span class="stat-label">Last feeding</span>
-        <span class="stat-value" id="statLast">—</span>
-      </div>
-      <div class="stat">
-        <span class="stat-label">Next feeding</span>
-        <span class="stat-value" id="statNext">—</span>
-      </div>
       <div class="stat">
         <span class="stat-label">Feeds today</span>
         <span class="stat-value" id="statTodayFeed">—</span>
-      </div>
-    </section>
-    <!-- Top metrics: pumping -->
-    <section class="stats cols-2">
-      <div class="stat">
-        <span class="stat-label">Last pumping</span>
-        <span class="stat-value" id="statLastPump">—</span>
+        <span class="stat-sub" id="statTodayFeedSub"></span>
       </div>
       <div class="stat">
-        <span class="stat-label">Pumped today</span>
-        <span class="stat-value" id="statTodayPump">—</span>
+        <span class="stat-label">Bottle today</span>
+        <span class="stat-value" id="statTodayBottle">—</span>
+        <span class="stat-sub" id="statTodayBottleSub"></span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Breast today</span>
+        <span class="stat-value" id="statTodayBreast">—</span>
       </div>
     </section>
 
@@ -420,6 +437,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=23"></script>
+  <script src="app.js?v=24"></script>
 </body>
 </html>

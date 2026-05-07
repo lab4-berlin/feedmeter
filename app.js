@@ -1049,7 +1049,7 @@ function tickMetrics() {
   const now = Date.now();
   const todayStart = (() => { const d = new Date(); d.setHours(0,0,0,0); return d.getTime(); })();
 
-  // ----- Feeding (breast or bottle) — exclude comfort feedings -----
+  // ----- Row 1: feeding status -----
   const feeds = state.entries.filter(e => TYPE_META[e.type]?.isFeed && e.end && !e.isComfort);
   feeds.sort((a, b) => (b.end || 0) - (a.end || 0));
   const lastFeed = feeds[0];
@@ -1059,12 +1059,13 @@ function tickMetrics() {
     const intervalMin = Number(state.settings.feedingIntervalMin) || 180;
     const dueAt = (lastFeed.start || 0) + intervalMin * 60 * 1000;
     const diff = dueAt - now;
+    const clock = formatClock(dueAt);
     const nextEl = $('statNext');
     if (diff > 0) {
-      nextEl.textContent = 'in ' + formatRel(diff);
+      nextEl.textContent = `in ${formatRel(diff)} · ${clock}`;
       nextEl.classList.remove('overdue');
     } else {
-      nextEl.textContent = 'overdue ' + formatRel(-diff);
+      nextEl.textContent = `overdue ${formatRel(-diff)} · ${clock}`;
       nextEl.classList.add('overdue');
     }
   } else {
@@ -1085,43 +1086,59 @@ function tickMetrics() {
     }
   }
 
-  let bottleMl = 0;
+  // ----- Row 2: today's feeding details -----
+  // Counts exclude comfort feedings; bottle source breakdown only counts
+  // bottles that have a chosen source (those without source still contribute
+  // to the total volume).
+  let feedCount = 0, breastCount = 0, bottleCount = 0;
+  let bottleMl = 0, ownMl = 0, formulaMl = 0;
   let breastMs = 0;
-  let feedCount = 0;
   for (const e of state.entries) {
     if ((e.start || 0) < todayStart) continue;
     if (!TYPE_META[e.type]?.isFeed || e.isComfort) continue;
     feedCount++;
-    if (e.type === 'bottle' && e.volume) bottleMl += e.volume;
-    if ((e.type === 'left' || e.type === 'right') && e.start && e.end) {
-      breastMs += (e.end - e.start);
+    if (e.type === 'bottle') {
+      bottleCount++;
+      if (e.volume) bottleMl += e.volume;
+      if (e.volume && e.source === 'own') ownMl += e.volume;
+      else if (e.volume && e.source === 'formula') formulaMl += e.volume;
+    } else if (e.type === 'left' || e.type === 'right') {
+      breastCount++;
+      if (e.start && e.end) breastMs += (e.end - e.start);
     }
   }
   // Include the currently running breast session (if any) in today's total
   if (active && (active.type === 'left' || active.type === 'right') && active.start >= todayStart) {
     breastMs += now - active.start;
   }
-  const breastMin = Math.round(breastMs / 60000);
-  const feedParts = [`${feedCount}×`];
-  if (bottleMl) feedParts.push(`${bottleMl} ml`);
-  if (breastMin) feedParts.push(`${breastMin} min`);
-  $('statTodayFeed').textContent = feedParts.join(' · ');
 
-  // ----- Pumping -----
+  $('statTodayFeed').textContent = `${feedCount}×`;
+  const feedSubParts = [];
+  if (breastCount) feedSubParts.push(`${breastCount} breast`);
+  if (bottleCount) feedSubParts.push(`${bottleCount} bottle`);
+  $('statTodayFeedSub').textContent = feedSubParts.join(' · ');
+
+  $('statTodayBottle').textContent = `${bottleMl} ml`;
+  const bottleSubParts = [];
+  if (ownMl) bottleSubParts.push(`${ownMl} own`);
+  if (formulaMl) bottleSubParts.push(`${formulaMl} formula`);
+  $('statTodayBottleSub').textContent = bottleSubParts.join(' · ');
+
+  const breastMin = Math.round(breastMs / 60000);
+  $('statTodayBreast').textContent = `${breastMin} min`;
+
+  // ----- Pumping block -----
   const pumps = state.entries.filter(e => e.type === 'pump' && e.end);
   pumps.sort((a, b) => (b.end || 0) - (a.end || 0));
   const lastPump = pumps[0];
   $('statLastPump').textContent = lastPump ? relativeTime(lastPump.end) : '—';
 
-  let pumpCount = 0, pumpMl = 0;
+  let pumpMl = 0;
   for (const e of state.entries) {
     if (e.type !== 'pump') continue;
-    if ((e.start || 0) >= todayStart) {
-      pumpCount++;
-      if (e.volume) pumpMl += e.volume;
-    }
+    if ((e.start || 0) >= todayStart && e.volume) pumpMl += e.volume;
   }
-  $('statTodayPump').textContent = `${pumpCount}× · ${pumpMl} ml`;
+  $('statTodayPump').textContent = `${pumpMl} ml`;
 }
 
 function formatRel(ms) {
