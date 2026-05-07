@@ -5,41 +5,6 @@ implementation-agnostic — the *what* and *why*, not the *how*.
 
 ---
 
-## 2. Daily formula limit warning
-
-**Why.** When supplementing breastfeeding with formula, parents often want to
-cap how much formula the baby gets per day. The app should help by warning
-when the day's formula intake is already at or above the desired limit —
-without blocking the entry, since real life sometimes requires going over.
-
-**What the user should see.**
-
-- A new setting: **Daily formula limit (ml)**. Optional — empty means "no
-  limit, no warning". Lives next to the other thresholds in Settings.
-
-- When the user starts a new **bottle** session, if today's already-recorded
-  formula intake is at or above the limit, show a non-blocking warning
-  *before* the timer starts:
-
-  > Today's formula is already at the daily limit (e.g. *"600 ml of 600 ml"*).
-  > If this bottle is formula, it will be over the limit.
-  > **OK** — continue and start the bottle. **Cancel** — abandon.
-
-- Two buttons: **OK** continues normally (timer starts), **Cancel** does
-  nothing.
-
-**Notes.**
-
-- The warning is purely informational. The user is never prevented from
-  starting the bottle, and they're not asked at that moment whether it's
-  formula — that's only chosen at save time.
-- The check uses the sum of `volume` for today's bottle entries with
-  `source: formula` (excluding comfort entries).
-- If the limit setting is unset/zero, this feature is a no-op.
-- No warning is shown for breast feedings or pumping.
-
----
-
 ## 3. Sync running sessions across devices
 
 **Why.** Today, a session only becomes visible to the rest of the family
@@ -197,3 +162,6 @@ feed, not two fresh ones.
   top metrics into a feeding/pumping status row plus a today-details row
   with feed-count, bottle-ml and breast-minutes breakdowns; "Next feeding"
   now also shows the absolute clock time.
+- **2. Daily formula limit warning** (commit `65efba5`, 2026-05-07) —
+  optional Settings → Daily formula limit (ml); warning modal before
+  starting a bottle when today's non-comfort formula is at/above the limit.
