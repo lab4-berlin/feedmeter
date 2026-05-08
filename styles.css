@@ -301,32 +301,32 @@ body {
 }
 
 /* Next-breast suggestion */
-.next-arrow {
+/* Static "Next" pill at the bottom of a breast tile. Hidden by default;
+   `.tile.is-next` (set by JS on whichever breast comes after the most
+   recent feed) reveals it. No animation. */
+.next-badge {
   position: absolute;
-  bottom: 14px;
+  bottom: 12px;
   left: 50%;
   transform: translateX(-50%);
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: #6f4aa3;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.2s;
-}
-/* Faded baseline so the breast tile hints there's "another side" even
-   when it's not the suggested-next one (matches the design mockup). */
-.tile-left .next-arrow,
-.tile-right .next-arrow {
-  opacity: 0.18;
+  transition: opacity 0.18s ease;
 }
 .tile.is-next {
   border-color: currentColor;
   box-shadow: 0 0 0 2px currentColor inset, var(--shadow);
 }
-.tile.is-next .next-arrow {
-  opacity: 0.7;
-  animation: next-bounce 1.3s ease-in-out infinite;
-}
-@keyframes next-bounce {
-  0%, 100% { transform: translateX(-50%) translateY(0); }
-  50%       { transform: translateX(-50%) translateY(4px); }
+.tile.is-next .next-badge {
+  opacity: 1;
 }
 
 /* Stats */
