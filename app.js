@@ -1450,18 +1450,19 @@ function tickMetrics() {
   const maxGapMin = Number(state.settings.mergeMaxGapMin) || 0;
 
   // ----- Row 1: feeding status -----
-  // "Last" stays the most recent COMPLETED non-comfort feed's end —
-  // honest and matches the chain card the user sees in history.
+  // Both "Last" and "Next" share the same anchor — the chain's earliest
+  // non-comfort start when grouping is on, otherwise the latest completed
+  // non-comfort feed's start. That way the two displayed numbers always
+  // satisfy `(time since last) + (time until next) = interval`, instead
+  // of leaking the chain span (or the last feed's duration).
   const feeds = state.entries.filter(e => TYPE_META[e.type]?.isFeed && e.end && !e.isComfort);
   feeds.sort((a, b) => (b.end || 0) - (a.end || 0));
   const lastFeed = feeds[0];
 
   if (lastFeed) {
-    $('statLast').textContent = relativeTime(lastFeed.end);
-    const intervalMin = Number(state.settings.feedingIntervalMin) || 180;
-    // Anchor the countdown on the chain's earliest non-comfort start when
-    // grouping is on, so the visible chain card and the countdown agree.
     const anchorStart = chainAnchorStart(lastFeed, maxGapMin);
+    $('statLast').textContent = relativeTime(anchorStart);
+    const intervalMin = Number(state.settings.feedingIntervalMin) || 180;
     const dueAt = anchorStart + intervalMin * 60 * 1000;
     const diff = dueAt - now;
     const clock = formatClock(dueAt);
