@@ -211,6 +211,21 @@ body {
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", system-ui, sans-serif;
 }
 
+/* Breast tiles: wrap the L/R letter in a circle. Caption is omitted so the
+   circle and the chevron-next-indicator have room to breathe. */
+.tile-left .tile-letter,
+.tile-right .tile-letter {
+  width: 78px;
+  height: 78px;
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 46px;
+  /* Carry the same vertical rhythm the chevron expects. */
+  margin-bottom: 6px;
+}
+
 .tile-name {
   font-size: 13px;
   font-weight: 500;
@@ -288,12 +303,18 @@ body {
 /* Next-breast suggestion */
 .next-arrow {
   position: absolute;
-  bottom: 10px;
+  bottom: 14px;
   left: 50%;
   transform: translateX(-50%);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.2s;
+}
+/* Faded baseline so the breast tile hints there's "another side" even
+   when it's not the suggested-next one (matches the design mockup). */
+.tile-left .next-arrow,
+.tile-right .next-arrow {
+  opacity: 0.18;
 }
 .tile.is-next {
   border-color: currentColor;
