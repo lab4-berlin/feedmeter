@@ -722,6 +722,8 @@ function openSettings() {
   $('settingMinDuration').value = state.settings.minFeedDurationMin ?? '';
   $('settingMinVolume').value = state.settings.minBottleVolumeMl ?? '';
   $('settingFormulaLimit').value = state.settings.dailyFormulaLimitMl || '';
+  // 0/empty/undefined → blank (= grouping off). Any positive number shows as-is.
+  $('settingMergeGap').value = state.settings.mergeMaxGapMin || '';
   $('settingBirthWeight').value = state.settings.birthWeightG || '';
   // Default on: only off when explicitly set to false in the sheet.
   $('settingOfferBottleChain').checked = state.settings.offerBottleChain !== false;
@@ -737,10 +739,13 @@ async function saveSettings() {
   // Empty input persists 0 (= no limit) so the user can actually clear it.
   const formulaLimitRaw = $('settingFormulaLimit').value;
   const formulaLimit = formulaLimitRaw === '' ? 0 : Math.max(0, parseInt(formulaLimitRaw, 10) || 0);
+  // Same convention for merge gap: empty → 0 → grouping off.
+  const mergeGapRaw = $('settingMergeGap').value;
+  const mergeGap = mergeGapRaw === '' ? 0 : Math.max(0, parseInt(mergeGapRaw, 10) || 0);
   try {
     setBusy($('settingsSave'), true);
     const birthW = $('settingBirthWeight').value === '' ? null : parseInt($('settingBirthWeight').value, 10);
-    const patch = { feedingIntervalMin: feed, dailyFormulaLimitMl: formulaLimit };
+    const patch = { feedingIntervalMin: feed, dailyFormulaLimitMl: formulaLimit, mergeMaxGapMin: mergeGap };
     if (minDur !== null) patch.minFeedDurationMin = minDur;
     if (minVol !== null) patch.minBottleVolumeMl = minVol;
     if (birthW !== null && !isNaN(birthW)) patch.birthWeightG = birthW;
@@ -771,6 +776,61 @@ function getActiveEntry() {
     if (!best || (e.start || 0) > (best.start || 0)) best = e;
   }
   return best;
+}
+
+// Group consecutive feed entries (left/right/bottle) whose end-to-start
+// gap stays within `maxGapMin` minutes. Each result is a chain in
+// start-ascending order. A 1-element result is a "lone" entry (no
+// neighbours within the gap) and renders standalone in the UI.
+//
+// Pump entries are NEVER grouped (not feeding for the baby) and should
+// be excluded by the caller. Comfort feedings DO participate in the
+// visual chain (per the user spec) — but the countdown anchor uses the
+// earliest *non-comfort* member to avoid a leading comfort feed shifting
+// the timer artificially. A live (no-end) entry can join a chain as the
+// last member, but never as a non-last member (since nothing can come
+// after a session that hasn't ended).
+function buildChains(entries, maxGapMin) {
+  const sorted = entries
+    .filter(e => e && !e.deleted && e.start != null)
+    .slice()
+    .sort((a, b) => a.start - b.start);
+  if (!maxGapMin || maxGapMin <= 0) return sorted.map(e => [e]);
+  const maxGapMs = maxGapMin * 60 * 1000;
+  const chains = [];
+  let current = null;
+  for (const e of sorted) {
+    if (!current) { current = [e]; continue; }
+    const prev = current[current.length - 1];
+    if (prev.end == null || (e.start - prev.end) > maxGapMs) {
+      chains.push(current);
+      current = [e];
+    } else {
+      current.push(e);
+    }
+  }
+  if (current) chains.push(current);
+  return chains;
+}
+
+// Pull just the feed entries (no pumps) from a list — convenience for
+// chain building.
+function feedEntriesOnly(entries) {
+  return entries.filter(e => e.type === 'left' || e.type === 'right' || e.type === 'bottle');
+}
+
+// Find the chain that contains `lastFeed` and return the start time the
+// "Next feeding" countdown should anchor on: the earliest non-comfort
+// member's start. When grouping is off (or the chain doesn't exist),
+// falls back to lastFeed.start — i.e. current behaviour.
+function chainAnchorStart(lastFeed, maxGapMin) {
+  if (!lastFeed) return 0;
+  if (!maxGapMin || maxGapMin <= 0) return lastFeed.start || 0;
+  const chains = buildChains(feedEntriesOnly(state.entries), maxGapMin);
+  const chain = chains.find(c => c.some(e => e.id === lastFeed.id));
+  if (!chain) return lastFeed.start || 0;
+  const firstReal = chain.find(e => !e.isComfort);
+  return (firstReal || lastFeed).start || 0;
 }
 
 function startSession(type) {
@@ -1207,12 +1267,10 @@ function renderEntries() {
   $('dayNext').disabled = isToday;
 
   entriesEl.innerHTML = '';
-  const dayEntries = state.entries
-    .filter(e => {
-      const ts = e.start || e.end || 0;
-      return ts >= dayStart && ts < dayEnd;
-    })
-    .sort((a, b) => (b.start || 0) - (a.start || 0));
+  const dayEntries = state.entries.filter(e => {
+    const ts = e.start || e.end || 0;
+    return ts >= dayStart && ts < dayEnd;
+  });
 
   if (!dayEntries.length) {
     emptyState.classList.remove('hidden');
@@ -1223,9 +1281,61 @@ function renderEntries() {
   }
   emptyState.classList.add('hidden');
 
-  for (const e of dayEntries) {
-    entriesEl.appendChild(renderEntry(e));
+  // Pumps never participate in chains (not feeding for the baby).
+  // Build chains over the day's feed entries only, then merge pumps
+  // back in as standalone groups, and sort everything newest-first.
+  const pumps = dayEntries.filter(e => e.type === 'pump');
+  const feeds = feedEntriesOnly(dayEntries);
+  const maxGapMin = Number(state.settings.mergeMaxGapMin) || 0;
+  const feedChains = buildChains(feeds, maxGapMin);
+
+  const groups = [
+    ...feedChains.map(c => ({ entries: c, sortKey: c[c.length - 1].start || 0 })),
+    ...pumps.map(p => ({ entries: [p], sortKey: p.start || 0 })),
+  ];
+  groups.sort((a, b) => b.sortKey - a.sortKey);
+
+  for (const g of groups) {
+    if (g.entries.length === 1) {
+      entriesEl.appendChild(renderEntry(g.entries[0]));
+    } else {
+      entriesEl.appendChild(renderChain(g.entries));
+    }
   }
+}
+
+// Render a chain of 2+ feed entries as a single grouped card. Inner rows
+// are real .entry elements so the existing tap-to-edit handler keeps
+// working — no ambiguity about which entry the tap targets.
+function renderChain(entries) {
+  const li = document.createElement('li');
+  li.className = 'entry-chain';
+
+  const first = entries[0];
+  const last = entries[entries.length - 1];
+  const startClock = formatClock(first.start);
+  const endClock = last.end ? formatClock(last.end) : 'live';
+
+  const head = document.createElement('div');
+  head.className = 'entry-chain-head';
+  head.innerHTML = `
+    <span class="entry-chain-label">
+      <span>Chain</span>
+      <span class="entry-chain-count">${entries.length} feeds</span>
+    </span>
+    <span class="entry-chain-time">${escapeHtml(startClock)} → ${escapeHtml(endClock)}</span>
+  `;
+
+  const body = document.createElement('ul');
+  body.className = 'entry-chain-body';
+  // Newest entry on top inside the card, matching the outer list direction.
+  for (let i = entries.length - 1; i >= 0; i--) {
+    body.appendChild(renderEntry(entries[i]));
+  }
+
+  li.appendChild(head);
+  li.appendChild(body);
+  return li;
 }
 
 // ----- Day picker -----
@@ -1337,8 +1447,11 @@ function startMetricsTick() {
 function tickMetrics() {
   const now = Date.now();
   const todayStart = (() => { const d = new Date(); d.setHours(0,0,0,0); return d.getTime(); })();
+  const maxGapMin = Number(state.settings.mergeMaxGapMin) || 0;
 
   // ----- Row 1: feeding status -----
+  // "Last" stays the most recent COMPLETED non-comfort feed's end —
+  // honest and matches the chain card the user sees in history.
   const feeds = state.entries.filter(e => TYPE_META[e.type]?.isFeed && e.end && !e.isComfort);
   feeds.sort((a, b) => (b.end || 0) - (a.end || 0));
   const lastFeed = feeds[0];
@@ -1346,7 +1459,10 @@ function tickMetrics() {
   if (lastFeed) {
     $('statLast').textContent = relativeTime(lastFeed.end);
     const intervalMin = Number(state.settings.feedingIntervalMin) || 180;
-    const dueAt = (lastFeed.start || 0) + intervalMin * 60 * 1000;
+    // Anchor the countdown on the chain's earliest non-comfort start when
+    // grouping is on, so the visible chain card and the countdown agree.
+    const anchorStart = chainAnchorStart(lastFeed, maxGapMin);
+    const dueAt = anchorStart + intervalMin * 60 * 1000;
     const diff = dueAt - now;
     const clock = formatClock(dueAt);
     const nextEl = $('statNext');
@@ -1376,23 +1492,37 @@ function tickMetrics() {
   }
 
   // ----- Row 2: today's feeding details -----
-  // Counts exclude comfort feedings; bottle source breakdown only counts
-  // bottles that have a chosen source (those without source still contribute
-  // to the total volume).
+  // "Feeds today" counts CHAINS (a chain = one feeding session per spec
+  // #5), but ml/min totals still sum every individual entry — the
+  // grouping is about how we count meals, not how we count milk.
+  // Filter to today's feed entries, then chain them: a cross-midnight
+  // chain naturally contributes 1 to each day it touches because each
+  // day only sees its own portion when filtered first.
+  const todayFeeds = feedEntriesOnly(
+    state.entries.filter(e => (e.start || 0) >= todayStart)
+  );
+  const todayChains = buildChains(todayFeeds, maxGapMin);
   let feedCount = 0, breastCount = 0, bottleCount = 0;
+  for (const chain of todayChains) {
+    const realInChain = chain.filter(e => !e.isComfort);
+    if (!realInChain.length) continue; // all-comfort chains don't count
+    feedCount++;
+    // Bucket the chain by its earliest non-comfort entry's type.
+    const earliest = realInChain[0]; // chain is start-asc, real subset preserves order
+    if (earliest.type === 'bottle') bottleCount++;
+    else breastCount++;
+  }
+  // ml/min totals: sum individual non-comfort entries (unchanged).
   let bottleMl = 0, ownMl = 0, formulaMl = 0;
   let breastMs = 0;
   for (const e of state.entries) {
     if ((e.start || 0) < todayStart) continue;
     if (!TYPE_META[e.type]?.isFeed || e.isComfort) continue;
-    feedCount++;
     if (e.type === 'bottle') {
-      bottleCount++;
       if (e.volume) bottleMl += e.volume;
       if (e.volume && e.source === 'own') ownMl += e.volume;
       else if (e.volume && e.source === 'formula') formulaMl += e.volume;
     } else if (e.type === 'left' || e.type === 'right') {
-      breastCount++;
       if (e.start && e.end) breastMs += (e.end - e.start);
     }
   }

@@ -22,6 +22,7 @@ These images are referenced from [`../what-feedmeter-does.md`](../what-feedmeter
 | `settings.png` | The **Settings** modal scrolled to show several of the fields. |
 | `conflict.png` | The **Session already running** modal with all three buttons visible. |
 | `chain-bottle.png` | The **Continue with a bottle?** modal that appears right after stopping a breast feeding. |
+| `chain.png` | A **chain card** in history grouping 2–3 closely-spaced feedings (mix of breast and bottle if possible) with the chain header visible. Captured with `Max gap to merge feedings` set in Settings. |
 
 ## Format conventions
 

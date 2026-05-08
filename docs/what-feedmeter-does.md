@@ -81,6 +81,20 @@ You can change:
 - The **Comfort feeding** toggle — to include or exclude the entry from the countdown and today's totals.
 - Or **Delete** the entry entirely.
 
+### Grouped feeding sessions
+
+Real feedings often come in bursts — baby pulls off the breast for two minutes then resumes, or you give the breast and then top up with a small bottle. With **Max gap to merge feedings** set in Settings (e.g. 30 min), entries that close to each other are shown together as a **chain card** in history:
+
+![Chain card grouping closely-spaced feedings](./screenshots/chain.png)
+
+- Each entry inside the chain is still tappable on its own — same edit flow.
+- The **Next feeding** countdown anchors on the *first* entry of the chain (so two short bursts don't make it look like the baby just had two fresh meals).
+- **Feeds today** counts the chain as one session (so 3 feeds in a chain show up as `1×` in the daily count, but the milk and minutes still sum normally).
+- Pumps never join a chain. Comfort feedings can be inside a chain visually, but they don't shift the countdown anchor.
+- A chain that crosses midnight is still one chain for the timer, but each calendar day shows its own portion in history and counts it as one for that day.
+
+If the setting is empty, every entry stands on its own — the way the app behaved before.
+
 ### Browsing past days
 
 Above the history list, use the **‹** and **›** arrows to step through days, or tap the date to jump to a specific one. The **Today** button brings you back.
@@ -107,6 +121,7 @@ You can change:
 - **Min breast feed duration** — sessions shorter than this trigger the comfort question.
 - **Min bottle volume** — bottles smaller than this trigger the comfort question.
 - **Daily formula limit** — optional warning when today's formula intake has reached the limit.
+- **Max gap to merge feedings** — when set, feedings within this many minutes of each other render as one *feeding session* in history, and the *Next feeding* countdown uses the chain's first entry as its anchor. Empty = no grouping (every entry stands alone).
 - **Birth weight** — reference line on the weight chart.
 - **Offer bottle after a breast feeding** — toggle the one-tap "Continue with a bottle?" prompt that appears after each breast feed.
 

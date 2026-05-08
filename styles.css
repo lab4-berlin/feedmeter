@@ -519,6 +519,62 @@ body {
 .comfort-mark { color: #8b7ab8; font-weight: 600; }
 .live-mark { color: var(--danger); font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; font-size: 11px; }
 
+/* Chain card: groups closely-spaced feedings into one feeding session.
+   Inner entries are real .entry rows so they keep tap-to-edit behaviour;
+   we just strip their individual border and tint the background. */
+.entry-chain {
+  list-style: none;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--rose);
+  border-radius: var(--radius-sm);
+  padding: 6px 6px 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.entry-chain-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 2px 4px 0;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  font-weight: 700;
+  flex-wrap: wrap;
+}
+.entry-chain-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.entry-chain-count { color: var(--rose); }
+.entry-chain-time {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  text-transform: none;
+}
+.entry-chain-body {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.entry-chain-body .entry {
+  border: 0;
+  background: var(--surface-2);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+.entry-chain-body .entry:active { background: var(--bg); }
+
 /* ---- Tab bar ---- */
 .tab-bar {
   display: flex;

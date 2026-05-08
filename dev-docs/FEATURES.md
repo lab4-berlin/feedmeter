@@ -5,53 +5,6 @@ implementation-agnostic — the *what* and *why*, not the *how*.
 
 ---
 
-## 5. Treat closely-spaced feedings as one for the countdown
-
-**Why.** When a feeding is split into two short bursts with a small break
-in between (e.g. baby pulls off the breast for a moment, then resumes; or
-breast quickly followed by a top-up bottle), the "next feeding" countdown
-currently resets to the *second* feeding's start time. That makes the
-countdown shorter than reality — the baby effectively just had one long
-feed, not two fresh ones.
-
-**What the user should see.**
-
-- A new setting: **Max gap to merge feedings (minutes)**. Optional —
-  empty/zero means "never merge, current behaviour".
-
-- When computing "Next feeding", if the most recent feeding's predecessor
-  ended within this many minutes of the most recent feeding's start, the
-  two are treated as a single chain for the countdown. The chain extends
-  backwards across as many feedings as keep meeting the threshold (so
-  three or more closely-spaced feeds also merge).
-
-- The countdown anchor is the **start time of the earliest feeding in
-  the chain**, plus the regular feeding interval.
-
-**Examples** (with `max gap = 30 min`, `feeding interval = 180 min`):
-
-- A: 10:00–10:05 · B: 10:30–10:35 — gap A→B = 25 min ≤ 30 → merge →
-  next feeding due at **A.start + 180 = 13:00**.
-- A: 10:00–10:05 · B: 10:40–10:50 — gap = 35 min > 30 → no merge →
-  next feeding due at **B.start + 180 = 13:40**.
-- A: 10:00–10:05 · B: 10:20–10:25 · C: 10:45–10:50 — gaps 15 and 20,
-  both ≤ 30 → all three merge → next due at **A.start + 180 = 13:00**.
-
-**Notes.**
-
-- Only affects the **"Next feeding" countdown** and the chosen "Last
-  feeding" anchor displayed alongside it. Feed counts, today's totals,
-  and history listings still show every entry separately.
-- "Feeding" here means the same thing it does elsewhere: any non-comfort
-  breast or bottle entry. Comfort entries and pumps are ignored when
-  building the chain.
-- The threshold compares the **end of the earlier feed to the start of
-  the later one** — that is, the actual idle time the baby spent not
-  feeding.
-- If the setting is unset/zero, behaviour is identical to today's.
-
----
-
 ## 6. Daily round-robin backups of the data tabs
 
 **Why.** A single accidental delete (someone fat-fingers the wrong entry,
@@ -130,3 +83,10 @@ undone by copying rows back from yesterday's backup.
   stopping any breast session (real or comfort) the app asks "Continue
   with a bottle?"; Yes starts a bottle session in one tap. Toggle in
   Settings → *Offer bottle after a breast feeding* (default on).
+- **5. Group closely-spaced feedings as one feeding session** (2026-05-08)
+  — new Settings → *Max gap to merge feedings (minutes)*; entries within
+  the gap render as a single chain card in history (each row still
+  tappable to edit). The "Next feeding" countdown anchors on the chain's
+  earliest non-comfort start, and "Feeds today" counts a chain as one
+  session. Default: empty (opt-in, no behaviour change for existing
+  families).
