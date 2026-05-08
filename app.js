@@ -315,6 +315,12 @@ async function bootstrap() {
 }
 
 async function retryPendingCreates() {
+  // Wait for any in-flight create from beginSession to settle first.
+  // Otherwise a poll-triggered bootstrap whose snapshot was taken before
+  // that create landed would fire a second add-entry for the same id while
+  // the first is still in flight — producing two rows in the sheet with
+  // the same id (one orphaned as a permanently-"live" ghost session).
+  if (activeCreatePromise) { try { await activeCreatePromise; } catch {} }
   const pending = state.entries.filter(e => e._pendingCreate);
   if (!pending.length) return;
   for (const e of pending) {

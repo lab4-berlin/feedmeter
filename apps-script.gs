@@ -87,6 +87,19 @@ function jsonOutput_(obj) {
     .setMimeType(ContentService.MimeType.JSON);
 }
 
+// Run fn while holding the script-wide lock, so concurrent web-app requests
+// can't interleave check-then-write sequences (e.g. addEntry_'s idempotency
+// check + appendRow). 20s wait covers worst-case spreadsheet write latency.
+function withLock_(fn) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(20000);
+  try {
+    return fn();
+  } finally {
+    lock.releaseLock();
+  }
+}
+
 function getSheet_(name, headers) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let s = ss.getSheetByName(name);
@@ -166,47 +179,52 @@ function rowToEntry_(r) {
 
 function addEntry_(entry, user) {
   if (!entry || !entry.type) throw new Error('Missing entry.type');
-  const s = getSheet_(ENTRIES_SHEET, ENTRIES_HEADERS);
-  // Idempotence: if a row with this client-supplied id already exists, return
-  // it as-is. Lets offline retries safely re-send the same create without
-  // creating duplicate rows.
-  if (entry.id) {
-    const existingRow = findRow_(s, entry.id);
-    if (existingRow > 0) {
-      const r = s.getRange(existingRow, 1, 1, ENTRIES_HEADERS.length).getValues()[0];
-      return rowToEntry_(r);
+  // The idempotency check below (findRow_ then appendRow) is a check-then-act
+  // race: Apps Script web-app requests can run in parallel, so two retries
+  // for the same client-supplied id could both read "no existing row" and
+  // both append, producing two rows with the same id. The first row would
+  // then be the only one ever found by findRow_, leaving the second one as
+  // an unreachable orphan ("ghost live session"). Lock to serialize.
+  return withLock_(() => {
+    const s = getSheet_(ENTRIES_SHEET, ENTRIES_HEADERS);
+    if (entry.id) {
+      const existingRow = findRow_(s, entry.id);
+      if (existingRow > 0) {
+        const r = s.getRange(existingRow, 1, 1, ENTRIES_HEADERS.length).getValues()[0];
+        return rowToEntry_(r);
+      }
     }
-  }
-  const now = new Date();
-  const id = entry.id || Utilities.getUuid();
-  const start = entry.start ? new Date(entry.start) : null;
-  const end   = entry.end   ? new Date(entry.end)   : null;
-  const duration = (start && end) ? Math.max(0, Math.round((end - start) / 1000)) : null;
-  // entry.user wins over the body-level user so the original starter is kept
-  // when a different device finishes the entry later.
-  const userField = entry.user || user || 'Unknown';
-  s.appendRow([
-    id, now, now, userField,
-    entry.type, start, end, duration,
-    entry.volume == null ? '' : Number(entry.volume),
-    entry.source || '',
-    false,
-    !!entry.isComfort,
-  ]);
-  return {
-    id,
-    createdAt: now.toISOString(),
-    updatedAt: now.toISOString(),
-    user: userField,
-    type: entry.type,
-    start: start ? start.getTime() : null,
-    end: end ? end.getTime() : null,
-    durationSec: duration,
-    volume: entry.volume == null ? null : Number(entry.volume),
-    source: entry.source || null,
-    deleted: false,
-    isComfort: !!entry.isComfort,
-  };
+    const now = new Date();
+    const id = entry.id || Utilities.getUuid();
+    const start = entry.start ? new Date(entry.start) : null;
+    const end   = entry.end   ? new Date(entry.end)   : null;
+    const duration = (start && end) ? Math.max(0, Math.round((end - start) / 1000)) : null;
+    // entry.user wins over the body-level user so the original starter is kept
+    // when a different device finishes the entry later.
+    const userField = entry.user || user || 'Unknown';
+    s.appendRow([
+      id, now, now, userField,
+      entry.type, start, end, duration,
+      entry.volume == null ? '' : Number(entry.volume),
+      entry.source || '',
+      false,
+      !!entry.isComfort,
+    ]);
+    return {
+      id,
+      createdAt: now.toISOString(),
+      updatedAt: now.toISOString(),
+      user: userField,
+      type: entry.type,
+      start: start ? start.getTime() : null,
+      end: end ? end.getTime() : null,
+      durationSec: duration,
+      volume: entry.volume == null ? null : Number(entry.volume),
+      source: entry.source || null,
+      deleted: false,
+      isComfort: !!entry.isComfort,
+    };
+  });
 }
 
 function findRow_(sheet, id) {
