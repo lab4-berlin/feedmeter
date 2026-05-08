@@ -1,0 +1,45 @@
+---
+description: Refresh the end-user docs and screenshots whenever the visible UI changes
+globs: index.html, styles.css, app.js
+alwaysApply: false
+---
+
+# Keep end-user docs in sync with the UI
+
+When you change anything that's **visible to end users** in `index.html`, `styles.css`, or `app.js`, you must also update the end-user documentation:
+
+- `docs/what-feedmeter-does.md` — the doc that describes what users see and how to use the app.
+- `docs/screenshots/` — the matching screenshot file(s). See `docs/screenshots/README.md` for the canonical filenames.
+
+## What counts as a UI-visible change
+
+**Triggers an update:**
+
+- New, renamed, removed, or reordered buttons / tiles / tabs / modals.
+- New settings, status fields, or stats on screen.
+- Changed user-facing labels, placeholder text, or modal titles.
+- New or changed user flows (e.g. a new prompt after an action).
+- Layout restructures.
+
+**Does not trigger an update:**
+
+- Pure refactors that don't change anything visible.
+- Sync, network, caching, offline-queue, or storage logic.
+- Bug fixes that don't change wording or structure.
+- CSS tweaks that don't change layout meaningfully (color polish, spacing).
+
+## Workflow when you make a UI-visible change
+
+1. **Edit `docs/what-feedmeter-does.md`** so the affected section still describes reality. Keep the tone friendly and concise — this doc is for non-technical family members.
+2. **List the stale screenshots** in your reply to the user. Reference filenames from `docs/screenshots/README.md` (e.g. *"`bottle-save.png` and `home.png` need to be re-captured"*).
+3. If the change introduces a **new screen, modal, or flow** that isn't covered yet:
+   - Add a new row to the screenshot list in `docs/screenshots/README.md`.
+   - Add a corresponding subsection to `docs/what-feedmeter-does.md`.
+4. You **cannot retake screenshots yourself** — that's a manual step the user does. Just clearly call out which ones go stale so they can refresh them in the same change.
+
+## Example callout
+
+> Heads up: this change renames "Bottle" to "Feed" on the third tile and adds a new **Diaper** tile. I've updated `docs/what-feedmeter-does.md` accordingly. The following screenshots are now stale and need to be re-captured (see `docs/screenshots/README.md`):
+>
+> - `home.png` — shows the four tiles, layout changed.
+> - `bottle-save.png` — modal title changed.

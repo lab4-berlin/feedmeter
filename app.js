@@ -31,6 +31,7 @@ const settingsModal = $('settingsModal');
 const comfortModal = $('comfortModal');
 const weightModal = $('weightModal');
 const formulaLimitModal = $('formulaLimitModal');
+const chainBottleModal = $('chainBottleModal');
 const syncBanner = $('syncBanner');
 const userChip = $('userChip');
 
@@ -230,6 +231,18 @@ function bindEvents() {
   $('formulaLimitCancel').addEventListener('click', () => hideModal(formulaLimitModal));
   formulaLimitModal.addEventListener('click', (e) => {
     if (e.target === formulaLimitModal) hideModal(formulaLimitModal); // backdrop = cancel
+  });
+
+  // Chain-bottle modal (offered after a breast feed)
+  $('chainBottleYesBtn').addEventListener('click', () => {
+    hideModal(chainBottleModal);
+    // Use startSession (not beginSession) so the formula-limit warning
+    // and any newly-detected conflict still apply to the chained bottle.
+    startSession('bottle');
+  });
+  $('chainBottleNoBtn').addEventListener('click', () => hideModal(chainBottleModal));
+  chainBottleModal.addEventListener('click', (e) => {
+    if (e.target === chainBottleModal) hideModal(chainBottleModal); // backdrop = no
   });
 
   // Active session conflict modal
@@ -710,6 +723,8 @@ function openSettings() {
   $('settingMinVolume').value = state.settings.minBottleVolumeMl ?? '';
   $('settingFormulaLimit').value = state.settings.dailyFormulaLimitMl || '';
   $('settingBirthWeight').value = state.settings.birthWeightG || '';
+  // Default on: only off when explicitly set to false in the sheet.
+  $('settingOfferBottleChain').checked = state.settings.offerBottleChain !== false;
   showModal(settingsModal);
 }
 
@@ -729,6 +744,7 @@ async function saveSettings() {
     if (minDur !== null) patch.minFeedDurationMin = minDur;
     if (minVol !== null) patch.minBottleVolumeMl = minVol;
     if (birthW !== null && !isNaN(birthW)) patch.birthWeightG = birthW;
+    patch.offerBottleChain = $('settingOfferBottleChain').checked;
     const data = await api('update-settings', { settings: patch });
     state.settings = Object.assign(state.settings, data.settings || {});
     saveCache();
@@ -895,6 +911,7 @@ async function stopSession() {
       return;
     }
     await completeEntry({ ...activeEntry, end, isComfort: false });
+    maybeOfferBottleChain(activeEntry.type);
     return;
   }
 
@@ -1090,12 +1107,26 @@ function openComfortModal(label) {
   showModal(comfortModal);
 }
 
+// Offer to start a bottle right after a breast feeding (combination-feed
+// flow). Only fires for left/right entries, only when the user explicitly
+// stopped the session (not from edit, conflict, or discard paths), and
+// only when the setting is on. Default: on.
+function maybeOfferBottleChain(type) {
+  if (type !== 'left' && type !== 'right') return;
+  if (state.settings.offerBottleChain === false) return;
+  $('chainSub').textContent = 'Combination feeding? Start a bottle now in one tap.';
+  showModal(chainBottleModal);
+}
+
 async function resolveComfort(isComfort) {
   if (!pendingComfort) return hideModal(comfortModal);
   const entry = { ...pendingComfort, isComfort };
   pendingComfort = null;
   hideModal(comfortModal);
   await completeEntry(entry);
+  // The comfort flow is reached from both the breast stop path and the
+  // bottle-below-min stop path; the chain prompt only applies to breast.
+  maybeOfferBottleChain(entry.type);
 }
 
 function openSaveModal(session) {

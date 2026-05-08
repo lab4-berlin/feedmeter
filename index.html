@@ -210,7 +210,7 @@
       <!-- Step 1: connect -->
       <div class="setup-step" data-step="connect">
         <h3 id="setupTitle">Connect to your sheet</h3>
-        <p class="modal-sub">Paste the Apps Script URL and enter the family passcode. See <code>SETUP.md</code> for the 5-minute setup.</p>
+        <p class="modal-sub">Paste the Apps Script URL and enter the family passcode. See <code>docs/getting-started.md</code> for the 5-minute setup.</p>
 
         <div class="field">
           <label for="setupUrl">Apps Script URL</label>
@@ -311,6 +311,14 @@
         <label for="settingBirthWeight">Birth weight (g)</label>
         <input id="settingBirthWeight" type="number" inputmode="numeric" min="500" max="6000" step="10" placeholder="e.g. 3200" />
         <p class="field-hint">Shown as a reference line on the weight chart.</p>
+      </div>
+
+      <div class="field">
+        <label class="checkbox-label">
+          <input type="checkbox" id="settingOfferBottleChain" />
+          Offer bottle after a breast feeding
+        </label>
+        <p class="field-hint">After you stop a breast session, ask whether to start a bottle right away. Useful for combination feeding.</p>
       </div>
 
       <div class="modal-error hidden" id="settingsError"></div>
@@ -443,6 +451,20 @@
     </div>
   </div>
 
+  <!-- Chain-bottle modal: shown after a breast feed is saved, to offer
+       starting a bottle in one tap (combination feeding). Disabled via
+       the "Offer bottle after a breast feeding" setting. -->
+  <div class="modal hidden" id="chainBottleModal" role="dialog" aria-modal="true" aria-labelledby="chainTitle">
+    <div class="modal-card">
+      <h3 id="chainTitle">Continue with a bottle?</h3>
+      <p class="modal-sub" id="chainSub"></p>
+      <div class="modal-actions space-between">
+        <button class="btn ghost" id="chainBottleNoBtn" type="button">No</button>
+        <button class="btn primary" id="chainBottleYesBtn" type="button">Yes, start bottle</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Formula limit warning modal -->
   <div class="modal hidden" id="formulaLimitModal" role="dialog" aria-modal="true" aria-labelledby="formulaLimitTitle">
     <div class="modal-card">
@@ -470,6 +492,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=26"></script>
+  <script src="app.js?v=27"></script>
 </body>
 </html>

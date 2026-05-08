@@ -32,7 +32,7 @@ The frontend is pure static HTML/CSS/JS — host it anywhere (GitHub Pages, Netl
 
 ## Setup (one-time, ~5 minutes)
 
-See [`SETUP.md`](./SETUP.md) for the step-by-step. TL;DR:
+See [`docs/getting-started.md`](./docs/getting-started.md) for the friendly walkthrough, or [`dev-docs/SETUP.md`](./dev-docs/SETUP.md) for the dev-flavoured version. TL;DR:
 
 1. Create a Google Sheet.
 2. Extensions → Apps Script → paste [`apps-script.gs`](./apps-script.gs).
@@ -56,8 +56,9 @@ For phones, after hosting, open the URL in Safari/Chrome → **Share → Add to 
 - `styles.css` — mobile-first design, no framework
 - `app.js` — UI, timer, optimistic state, API client
 - `apps-script.gs` — the Apps Script backend (paste into your sheet's script editor)
-- `SETUP.md` — setup walkthrough
 - `manifest.webmanifest`, `icon-192.svg`, `icon-512.svg` — PWA
+- `docs/` — end-user documentation (setup walkthrough, app tour, everyday use)
+- `dev-docs/` — internal docs (technical setup notes, feature backlog)
 - `README.md` — this file
 
 ## Data model

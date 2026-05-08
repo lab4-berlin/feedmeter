@@ -5,110 +5,6 @@ implementation-agnostic — the *what* and *why*, not the *how*.
 
 ---
 
-## 3. Sync running sessions across devices
-
-**Why.** Today, a session only becomes visible to the rest of the family
-when it's *finished* — until then it lives only in the device that started
-it. That breaks the typical hand-off: one parent starts breastfeeding,
-hands the baby to the other parent who continues with a bottle, and the
-running session is invisible to everyone except the original phone. Worse,
-the original phone may forget to stop the session, or both parents may
-inadvertently start sessions in parallel.
-
-**What the user should see.**
-
-- The moment a session starts on any device, it is recorded centrally with
-  a start time and no end time — i.e. as an **active session**. All other
-  devices see it as live (with the running timer, the same way the local
-  device does).
-
-- Only **one active session per family** is allowed at a time, regardless
-  of type or device. The active session can be of any type (left, right,
-  bottle, pump).
-
-- When a user tries to start a new session and an active one already
-  exists (whether started by them or by someone else), they are shown a
-  modal that explains the situation and offers:
-  - **Continue old** — keep the active session running, do nothing.
-  - **Stop old & start new** — close the old session (saving it as-is)
-    and immediately start the new one.
-  - **Discard old & start new** — drop the old session entirely (don't
-    save it) and start the new one fresh.
-
-- The same single-active-session check also covers the running timer on
-  one's own device — i.e. there is no longer a difference between "my
-  device's local active session" and "someone else's active session".
-
-- Editing/deleting active sessions follows the same rules as completed
-  entries.
-
-**Why it matters in practice.**
-
-- *Hand-off:* mama starts the breast on her phone → the dad's phone
-  immediately shows "Left breast running, 03:12". When the baby switches
-  to the bottle on dad's phone, dad sees the still-running breast session,
-  taps **Stop old & start new**, the breast is closed, the bottle starts.
-
-- *Forgotten stop:* mama starts the breast and goes to bed without
-  stopping. The next morning, anyone starting a session sees the stale
-  running session and is prompted — they can stop it or discard it.
-
-**Notes.**
-
-- This is a return to the open-entry model the project briefly had for
-  Google Assistant integration; same concept (one row created at start,
-  closed at finish), just generalised to all session sources.
-- Devices need to learn about new active sessions reasonably quickly —
-  on app focus / regular polling is fine, real-time is not required.
-- An active session shown on another device should display the running
-  timer ticking just like on the originating device.
-- Behaviour when offline: the device that started the session keeps
-  running locally; the central record is created as soon as the network
-  is reachable again. Conflict resolution can be best-effort — the
-  spirit is "try to keep everyone in sync", not "guaranteed exclusivity".
-
----
-
-## 4. Offer to chain a bottle after a breast feeding
-
-**Why.** A common pattern is: baby gets the breast, but there isn't enough
-milk or the baby is too tired, so the parent immediately follows up with a
-bottle. Today this requires four taps (stop breast → save → start bottle
-→ stop bottle), and the two related entries can come from different
-people on different phones. We can make the chained case a single,
-guided flow.
-
-**What the user should see.**
-
-When a **breast** session ends, after the existing save/comfort flow has
-been resolved and the breast entry has been recorded, the app asks:
-
-> Continue with a bottle?
-> **Yes, start bottle** — immediately starts a bottle session.
-> **No** — finish here, return to the home screen.
-
-If the user picks "Yes, start bottle", a bottle session begins right away
-(timer running) as if they had tapped the Bottle tile themselves.
-
-**Notes.**
-
-- Only triggers after **left** or **right** breast sessions. Bottle/pump
-  finishes do not show this prompt.
-- Triggers regardless of whether the breast was marked as a real or
-  comfort feed — both cases are commonly followed by a bottle.
-- The chained bottle is its own independent entry. There is no special
-  "linked" relationship between the two entries beyond their timestamps
-  being close together.
-- If the parent explicitly cancelled / discarded the breast session
-  (i.e. nothing was saved), do **not** show the prompt.
-- Consider exposing a setting to disable the prompt for users who don't
-  combination-feed.
-- If feature #3 (synced active sessions) lands first, the bottle started
-  via this prompt is just a normal active session — no special handling
-  needed.
-
----
-
 ## 5. Treat closely-spaced feedings as one for the countdown
 
 **Why.** When a feeding is split into two short bursts with a small break
@@ -156,6 +52,66 @@ feed, not two fresh ones.
 
 ---
 
+## 6. Daily round-robin backups of the data tabs
+
+**Why.** A single accidental delete (someone fat-fingers the wrong entry,
+or a stale device pushes old state, or a manual edit in the sheet goes
+wrong) currently loses data with no way to recover. We want a lightweight
+automatic safety net: a small rolling window of full-table snapshots
+sitting next to the live data in the same sheet, so a slip-up can be
+undone by copying rows back from yesterday's backup.
+
+**What the system does (no UI changes — backend only).**
+
+- Whenever the backend handles a write (entry/weight add, update or
+  delete) and detects it is the **first write of a new local day** (the
+  current date in the spreadsheet's timezone differs from the last
+  recorded backup date), it takes a snapshot **before applying the
+  write**.
+- The snapshot is a **full copy** of both data tabs:
+  - `feedings` → `feedings_backup_YYYY-MM-DD`
+  - `weight`   → `weight_backup_YYYY-MM-DD`
+  …where `YYYY-MM-DD` is the date of the data being preserved (i.e.
+  yesterday from the perspective of the new write that triggered it).
+- Only the **3 most recent backup pairs** are kept. Before creating a
+  new pair, if there are already 3 pairs the oldest pair (by date in
+  the tab name) is deleted. End state: at any time exactly 6 backup
+  tabs exist, 3 per data tab, covering up to the last 3 days the family
+  was active.
+- A `lastBackupDate` value in the `settings` tab tracks when the
+  rotation last ran so the trigger only fires once per day.
+
+**Example** (today is Wed, existing backups for Sat / Sun / Mon).
+
+- First write on Wed → backup of Tue is created
+  (`feedings_backup_<Tue>`, `weight_backup_<Tue>`); the Sat pair is
+  deleted. Final tabs: backups for Sun, Mon, Tue.
+- A second write later on Wed → no backup activity (already done today).
+- First write on Thu → backup of Wed is created; Sun pair is deleted.
+  Final tabs: backups for Mon, Tue, Wed.
+
+**Notes.**
+
+- Pure backend feature — Apps Script only. The frontend never sees these
+  tabs and no client behaviour changes.
+- "First write" includes any mutating action (add / update / delete of
+  entries or weights). Pure reads (bootstrap, list-entries) do not
+  trigger a backup.
+- Day boundary uses the **spreadsheet's timezone**, the same notion of
+  "today" the rest of the app uses (not UTC).
+- Backups are full flat copies of the source tab, headers included.
+  Restoring is a manual operation (open the sheet, copy rows back) —
+  no in-app restore UI in this version.
+- If the family doesn't use the app on a given day, no backup is created
+  for that day; the next backup just covers all the inactive days as a
+  single "previous-day" snapshot.
+- If a snapshot fails (rare — quota or transient sheet API hiccup), the
+  triggering write should still go through: backups are best-effort.
+- If the user manually deletes a backup tab in the sheet, that's fine —
+  the next rotation just creates whatever is missing and continues.
+
+---
+
 # Done
 
 - **1. Restructure top stats** (commit `4efc5ef`, 2026-05-07) — split the
@@ -165,3 +121,12 @@ feed, not two fresh ones.
 - **2. Daily formula limit warning** (commit `65efba5`, 2026-05-07) —
   optional Settings → Daily formula limit (ml); warning modal before
   starting a bottle when today's non-comfort formula is at/above the limit.
+- **3. Sync running sessions across devices** (commit `15f4582`, 2026-05-07,
+  duplicate-row race fixed in `c3c7986`, 2026-05-08) — active sessions
+  live as `end=null` rows in the sheet so every device sees the live
+  timer; conflict modal (Continue / Stop & start / Discard & start) when
+  starting a session while one is already running, on any device.
+- **4. Offer bottle chain after a breast feeding** (2026-05-08) — after
+  stopping any breast session (real or comfort) the app asks "Continue
+  with a bottle?"; Yes starts a bottle session in one tap. Toggle in
+  Settings → *Offer bottle after a breast feeding* (default on).
