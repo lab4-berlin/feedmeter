@@ -17,6 +17,8 @@ These images are referenced from [`../what-feedmeter-does.md`](../what-feedmeter
 | `tile-live.png` | Close-up of any tile in **LIVE** state, showing the pulsing badge, the running timer, and the "Tap to stop" hint. |
 | `bottle-save.png` | The "Save session" modal that appears after stopping a bottle — both the **Source** segments (Own milk / Formula) and the **Volume** input visible. |
 | `comfort.png` | The **Short feeding** modal asking real-feeding vs comfort-only. |
+| `chain-bottle.png` | The **Continue with a bottle?** modal offered after a breast feed (combination feeding prompt). |
+| `chain.png` | A **chain card** in History — multiple closely-spaced feedings grouped as one session, with the "CHAIN N FEEDS" header and time range visible. Requires `mergeMaxGapMin` set in Settings. |
 | `edit-entry.png` | The **Edit entry** modal opened from a tapped history row, showing start/end pickers, source, volume, and the comfort checkbox. |
 | `weight.png` | The **Weight** tab — chart with at least 4–5 points and a few rows in the entries list. |
 | `settings.png` | The **Settings** modal scrolled to show several of the fields. |

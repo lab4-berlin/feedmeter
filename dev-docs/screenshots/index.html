@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <title>FeedMeter (fixture for screenshots)</title>
+  <link rel="stylesheet" href="../../styles.css" />
+  <style>
+    /* Chrome 148 headless ignores --window-size, so we constrain the
+       document itself to a phone-sized 390px column. Below the styles.css
+       media-query breakpoint (600px), so layout is unaffected. */
+    html, body { width: 390px !important; max-width: 390px !important; overflow-x: hidden; }
+    /* Modals use position:fixed so they ignore the body's width and
+       stretch to the real viewport. Re-anchor them to a 390-wide column
+       on the left so the screenshot clip captures them fully. */
+    .modal { left: 0 !important; right: auto !important; width: 390px !important; }
+    .modal-card { max-width: 390px !important; }
+  </style>
+  <script src="./fixture-data.js"></script>
+  <script>
+    // 1) Patch fetch + pre-fill localStorage before any app code runs.
+    installFixture();
+
+    // 2) Pull the real index.html body, mount it, then load app.js.
+    //    This keeps the fixture in sync with the real DOM automatically.
+    (async () => {
+      const resp = await fetch('../../index.html?fixture=' + Date.now());
+      const txt = await resp.text();
+      // Match everything between <body...> and the trailing app.js script tag.
+      const m = txt.match(/<body[^>]*>([\s\S]*?)<script[^>]*src="app\.js[^"]*"[^>]*><\/script>\s*<\/body>/);
+      if (!m) {
+        document.body.innerHTML = '<pre style="padding:1rem;font:14px monospace;color:#900">fixture: failed to extract body from ../../index.html</pre>';
+        return;
+      }
+      document.body.innerHTML = m[1];
+
+      const s = document.createElement('script');
+      s.src = '../../app.js';
+      s.onload = () => { if (typeof runCapture === 'function') runCapture(); };
+      document.body.appendChild(s);
+    })();
+  </script>
+</head>
+<body>
+  <noscript>This fixture page requires JavaScript.</noscript>
+</body>
+</html>
