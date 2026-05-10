@@ -45,6 +45,7 @@ let state = {
   weights: [],
   settings: { feedingIntervalMin: 180 },
   historyDate: null, // YYYY-MM-DD or null = today (live)
+  statsOffset: 0,    // 0 = last 24h ending now, 1 = previous 24h, ...
 };
 let activeTab = 'feedings';
 let editingWeightId = null;
@@ -157,6 +158,16 @@ function bindEvents() {
   });
   $('dayPrev').addEventListener('click', () => stepDay(-1));
   $('dayNext').addEventListener('click', () => stepDay(+1));
+
+  // Top-stats sliding-window stepper (independent from history day-nav).
+  // `‹` walks into the past (older 24h slice), `›` walks back toward now.
+  $('statsPrev').addEventListener('click', () => stepStatsWindow(+1));
+  $('statsNext').addEventListener('click', () => stepStatsWindow(-1));
+  $('statsNow').addEventListener('click', () => {
+    if (state.statsOffset === 0) return;
+    state.statsOffset = 0;
+    tickMetrics();
+  });
 
   // User picker
   $('addUserBtn').addEventListener('click', addNewUser);
@@ -1444,10 +1455,42 @@ function startMetricsTick() {
   metricsHandle = setInterval(tickMetrics, 30 * 1000);
 }
 
-function tickMetrics() {
+// Sliding 24h window for the totals area. Offset 0 = the 24h ending now,
+// offset 1 = the 24h before that, etc. Half-open interval [start, end) so
+// neighbouring windows never double-count an entry that lands on a boundary.
+function statsWindow() {
   const now = Date.now();
-  const todayStart = (() => { const d = new Date(); d.setHours(0,0,0,0); return d.getTime(); })();
+  const offset = Math.max(0, state.statsOffset | 0);
+  const DAY = 86400000;
+  return { start: now - (offset + 1) * DAY, end: now - offset * DAY, now, offset };
+}
+
+function formatStatsWindowLabel(offset) {
+  if (offset <= 0) return 'Last 24h';
+  if (offset === 1) return '24–48h ago';
+  return `${offset * 24}–${(offset + 1) * 24}h ago`;
+}
+
+function stepStatsWindow(delta) {
+  const next = Math.max(0, (state.statsOffset | 0) + delta);
+  if (next === state.statsOffset) return;
+  state.statsOffset = next;
+  tickMetrics();
+}
+
+function tickMetrics() {
+  const win = statsWindow();
+  const now = win.now;
   const maxGapMin = Number(state.settings.mergeMaxGapMin) || 0;
+
+  // Update stepper UI: `‹` is disabled when there's no entry strictly older
+  // than the current window's start (no point walking into emptiness).
+  const hasOlder = state.entries.some(e => (e.start || 0) < win.start);
+  $('statsPrev').disabled = !hasOlder;
+  $('statsNext').disabled = win.offset === 0;
+  $('statsNow').classList.toggle('hidden', win.offset === 0);
+  $('statsWindowLabel').textContent = formatStatsWindowLabel(win.offset);
+  $('statPumpWindowLabel').textContent = win.offset === 0 ? '24h' : formatStatsWindowLabel(win.offset);
 
   // ----- Row 1: feeding status -----
   // Both "Last" and "Next" share the same anchor — the chain's earliest
@@ -1492,19 +1535,21 @@ function tickMetrics() {
     }
   }
 
-  // ----- Row 2: today's feeding details -----
-  // "Feeds today" counts CHAINS (a chain = one feeding session per spec
-  // #5), but ml/min totals still sum every individual entry — the
-  // grouping is about how we count meals, not how we count milk.
-  // Filter to today's feed entries, then chain them: a cross-midnight
-  // chain naturally contributes 1 to each day it touches because each
-  // day only sees its own portion when filtered first.
-  const todayFeeds = feedEntriesOnly(
-    state.entries.filter(e => (e.start || 0) >= todayStart)
-  );
-  const todayChains = buildChains(todayFeeds, maxGapMin);
+  // ----- Row 2: feeding totals over the selected sliding window -----
+  // "Feeds" counts CHAINS (a chain = one feeding session per spec #5),
+  // but ml/min totals still sum every individual entry — the grouping
+  // is about how we count meals, not how we count milk.
+  // Window membership uses the entry's `start`, matching how chains are
+  // bucketed elsewhere; cross-window entries naturally contribute to
+  // whichever window they began in.
+  const inWindow = e => {
+    const s = e.start || 0;
+    return s >= win.start && s < win.end;
+  };
+  const windowFeeds = feedEntriesOnly(state.entries.filter(inWindow));
+  const windowChains = buildChains(windowFeeds, maxGapMin);
   let feedCount = 0, breastCount = 0, bottleCount = 0;
-  for (const chain of todayChains) {
+  for (const chain of windowChains) {
     const realInChain = chain.filter(e => !e.isComfort);
     if (!realInChain.length) continue; // all-comfort chains don't count
     feedCount++;
@@ -1513,11 +1558,10 @@ function tickMetrics() {
     if (earliest.type === 'bottle') bottleCount++;
     else breastCount++;
   }
-  // ml/min totals: sum individual non-comfort entries (unchanged).
   let bottleMl = 0, ownMl = 0, formulaMl = 0;
   let breastMs = 0;
   for (const e of state.entries) {
-    if ((e.start || 0) < todayStart) continue;
+    if (!inWindow(e)) continue;
     if (!TYPE_META[e.type]?.isFeed || e.isComfort) continue;
     if (e.type === 'bottle') {
       if (e.volume) bottleMl += e.volume;
@@ -1527,10 +1571,17 @@ function tickMetrics() {
       if (e.start && e.end) breastMs += (e.end - e.start);
     }
   }
-  // Include the currently running breast session (if any) in today's total
+  // Include the currently running breast session for the live window only.
+  // For older windows the running entry hasn't ended yet so it would skew
+  // the historical total — past windows stay frozen.
   const runningEntry = getActiveEntry();
-  if (runningEntry && (runningEntry.type === 'left' || runningEntry.type === 'right') && runningEntry.start >= todayStart) {
-    // The entry is also in state.entries; only add the still-unclosed gap.
+  if (
+    runningEntry &&
+    (runningEntry.type === 'left' || runningEntry.type === 'right') &&
+    win.offset === 0 &&
+    runningEntry.start >= win.start &&
+    runningEntry.start < win.end
+  ) {
     breastMs += now - runningEntry.start;
   }
 
@@ -1558,7 +1609,7 @@ function tickMetrics() {
   let pumpMl = 0;
   for (const e of state.entries) {
     if (e.type !== 'pump') continue;
-    if ((e.start || 0) >= todayStart && e.volume) pumpMl += e.volume;
+    if (inWindow(e) && e.volume) pumpMl += e.volume;
   }
   $('statTodayPump').textContent = `${pumpMl} ml`;
 }

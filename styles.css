@@ -431,6 +431,30 @@ body {
   color: var(--danger);
 }
 
+/* Sliding-window stepper for the top stats area */
+.stats-window-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin: 6px 0 8px;
+  padding: 0 4px;
+}
+.stats-window-label {
+  min-width: 110px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-variant-numeric: tabular-nums;
+}
+.stats-window-nav .link-btn {
+  padding: 2px 8px;
+  font-size: 12px;
+}
+
 /* History */
 .history { margin-top: 6px; }
 .history-head {

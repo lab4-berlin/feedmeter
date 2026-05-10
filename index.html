@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23f7c8d4'/%3E%3Ccircle cx='32' cy='28' r='10' fill='%23fff'/%3E%3Crect x='28' y='34' width='8' height='18' rx='4' fill='%23fff'/%3E%3C/svg%3E" />
   <link rel="apple-touch-icon" href="icon-192.svg" />
-  <link rel="stylesheet" href="styles.css?v=28" />
+  <link rel="stylesheet" href="styles.css?v=29" />
 </head>
 <body>
   <header class="app-header">
@@ -54,26 +54,42 @@
           <span class="status-line-value" id="statLastPump">—</span>
         </div>
         <div class="status-line">
-          <span class="status-line-label">Today</span>
+          <span class="status-line-label" id="statPumpWindowLabel">24h</span>
           <span class="status-line-value" id="statTodayPump">—</span>
         </div>
       </div>
     </section>
 
-    <!-- Row 2: today's feeding details -->
+    <!-- Sliding-window stepper for the totals below (and the pump 24h line above) -->
+    <div class="stats-window-nav" role="group" aria-label="Stats time window">
+      <button class="day-step" id="statsPrev" type="button" aria-label="Older 24h window">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="15 18 9 12 15 6"/>
+        </svg>
+      </button>
+      <span class="stats-window-label" id="statsWindowLabel">Last 24h</span>
+      <button class="day-step" id="statsNext" type="button" aria-label="Newer 24h window" disabled>
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="9 18 15 12 9 6"/>
+        </svg>
+      </button>
+      <button class="link-btn hidden" id="statsNow" type="button">Now</button>
+    </div>
+
+    <!-- Row 2: feeding totals over the selected sliding window -->
     <section class="stats cols-3">
       <div class="stat">
-        <span class="stat-label">Feeds today</span>
+        <span class="stat-label">Feeds</span>
         <span class="stat-value" id="statTodayFeed">—</span>
         <span class="stat-sub" id="statTodayFeedSub"></span>
       </div>
       <div class="stat">
-        <span class="stat-label">Bottle today</span>
+        <span class="stat-label">Bottle</span>
         <span class="stat-value" id="statTodayBottle">—</span>
         <span class="stat-sub" id="statTodayBottleSub"></span>
       </div>
       <div class="stat">
-        <span class="stat-label">Breast today</span>
+        <span class="stat-label">Breast</span>
         <span class="stat-value" id="statTodayBreast">—</span>
       </div>
     </section>
@@ -496,6 +512,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=29"></script>
+  <script src="app.js?v=30"></script>
 </body>
 </html>
