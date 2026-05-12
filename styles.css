@@ -904,6 +904,115 @@ body {
   color: var(--muted);
 }
 
+/* Feeding-scheme overlay: read-only pre-formatted text and the in-place
+   editor that swaps it. We use `pre` so newlines and indentation in the
+   midwife's notes survive verbatim, and a generous max-height with
+   internal scroll so a long plan never blows the modal off the screen. */
+.scheme-text {
+  margin: 0 0 12px;
+  padding: 14px 16px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 50vh;
+  overflow: auto;
+}
+.scheme-empty-msg {
+  margin: 0 0 12px;
+  padding: 18px 16px;
+  background: var(--surface-2);
+  border: 1px dashed var(--line);
+  border-radius: 12px;
+  color: var(--muted);
+  font-size: 14px;
+  text-align: center;
+}
+#schemeEditField textarea {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-2);
+  padding: 12px 14px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink);
+  outline: none;
+  resize: vertical;
+  min-height: 220px;
+  transition: border-color 0.15s, background 0.15s;
+}
+#schemeEditField textarea:focus {
+  border-color: var(--rose);
+  background: #fff;
+}
+.scheme-history {
+  margin: 4px 0 12px;
+  padding: 0;
+}
+.scheme-history > summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 6px 4px;
+  user-select: none;
+}
+.scheme-history > summary:hover { color: var(--ink); }
+.scheme-history > summary .muted { color: var(--muted); font-weight: 400; margin-left: 4px; }
+.scheme-history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+.scheme-history-item {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+.scheme-history-item > summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 10px 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 13px;
+}
+.scheme-history-item > summary::-webkit-details-marker { display: none; }
+.scheme-history-date {
+  font-weight: 600;
+  color: var(--ink);
+}
+.scheme-history-meta {
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.scheme-history-item pre {
+  margin: 0;
+  padding: 12px 14px;
+  border-top: 1px solid var(--line);
+  background: var(--surface);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--ink);
+  max-height: 30vh;
+  overflow: auto;
+}
+
 .modal-error {
   background: #fde7ec;
   color: #b73a52;

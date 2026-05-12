@@ -32,6 +32,7 @@ const comfortModal = $('comfortModal');
 const weightModal = $('weightModal');
 const formulaLimitModal = $('formulaLimitModal');
 const chainBottleModal = $('chainBottleModal');
+const schemeModal = $('schemeModal');
 const syncBanner = $('syncBanner');
 const userChip = $('userChip');
 
@@ -43,6 +44,7 @@ let state = {
   entries: [],
   users: [],
   weights: [],
+  schemes: [],       // newest first; schemes[0] is the active midwife plan
   settings: { feedingIntervalMin: 180 },
   historyDate: null, // YYYY-MM-DD or null = today (live)
   statsOffset: 0,    // 0 = last 24h ending now, 1 = previous 24h, ...
@@ -65,6 +67,7 @@ try {
     if (Array.isArray(cached.entries)) state.entries = cached.entries;
     if (Array.isArray(cached.users)) state.users = cached.users;
     if (Array.isArray(cached.weights)) state.weights = cached.weights;
+    if (Array.isArray(cached.schemes)) state.schemes = cached.schemes;
     if (cached.settings && typeof cached.settings === 'object') {
       Object.assign(state.settings, cached.settings);
     }
@@ -147,7 +150,22 @@ function bindEvents() {
 
   // Header
   $('settingsBtn').addEventListener('click', openSettings);
+  $('schemeBtn').addEventListener('click', openSchemeModal);
   userChip.addEventListener('click', openUserPicker);
+
+  // Feeding-scheme modal
+  $('schemeClose').addEventListener('click', () => hideModal(schemeModal));
+  $('schemeEditBtn').addEventListener('click', () => setSchemeMode('edit'));
+  $('schemeAdd').addEventListener('click', () => setSchemeMode('edit'));
+  $('schemeCancelEdit').addEventListener('click', () => {
+    // Returning to view (or empty) discards textarea changes — that's the
+    // contract of Cancel; the saved version on the server is untouched.
+    setSchemeMode(state.schemes.length ? 'view' : 'empty');
+  });
+  $('schemeSave').addEventListener('click', saveScheme);
+  schemeModal.addEventListener('click', (e) => {
+    if (e.target === schemeModal) hideModal(schemeModal);
+  });
 
   // History day picker
   $('dayPick').addEventListener('click', openDayPicker);
@@ -329,6 +347,7 @@ async function bootstrap() {
   }
   state.users = data.users || [];
   state.weights = data.weights || [];
+  state.schemes = Array.isArray(data.schemes) ? data.schemes : [];
   state.settings = Object.assign({ feedingIntervalMin: 180 }, data.settings || {});
   saveCache();
   render();
@@ -374,6 +393,7 @@ function saveCache() {
     entries: state.entries,
     users: state.users,
     weights: state.weights,
+    schemes: state.schemes,
     settings: state.settings,
   }));
 }
@@ -771,6 +791,116 @@ async function saveSettings() {
     showError($('settingsError'), err.message);
   } finally {
     setBusy($('settingsSave'), false);
+  }
+}
+
+// ----- Feeding-scheme reference (midwife notes) -----
+
+// The scheme overlay has three modes; `setSchemeMode` is the single place
+// that decides which controls and panes are visible. Calling it after a
+// state change (open / save / cancel) keeps the buttons consistent.
+//   - 'view'  : at least one scheme exists; show latest text + Edit button
+//   - 'edit'  : textarea pre-filled, Save + Cancel; history is hidden so
+//               the user isn't tempted to compare while typing
+//   - 'empty' : no scheme yet; "Add scheme" promotes straight into edit
+function setSchemeMode(mode) {
+  const latest = state.schemes[0] || null;
+  const isView = mode === 'view';
+  const isEdit = mode === 'edit';
+  const isEmpty = mode === 'empty';
+
+  $('schemeText').classList.toggle('hidden', !isView);
+  $('schemeEditField').classList.toggle('hidden', !isEdit);
+  $('schemeEmpty').classList.toggle('hidden', !isEmpty);
+  hideError($('schemeError'));
+
+  $('schemeEditBtn').classList.toggle('hidden', !isView);
+  $('schemeSave').classList.toggle('hidden', !isEdit);
+  $('schemeCancelEdit').classList.toggle('hidden', !isEdit);
+  $('schemeAdd').classList.toggle('hidden', !isEmpty);
+
+  // History only makes sense in view mode and only when there's more than
+  // the active version to compare against.
+  const showHistory = isView && state.schemes.length > 1;
+  $('schemeHistory').classList.toggle('hidden', !showHistory);
+  $('schemeHistory').open = false;
+
+  if (isView && latest) {
+    $('schemeText').textContent = latest.text || '';
+    $('schemeSub').textContent = formatSchemeMeta(latest);
+    if (showHistory) renderSchemeHistory();
+  } else if (isEdit) {
+    // Pre-fill with the latest version (if any) so editing reads as
+    // "tweak the current scheme" rather than "start over".
+    $('schemeTextarea').value = latest ? (latest.text || '') : '';
+    $('schemeSub').textContent = latest
+      ? `Editing — saving creates a new version (last: ${formatSchemeMeta(latest)})`
+      : 'New scheme';
+    setTimeout(() => $('schemeTextarea').focus(), 30);
+  } else {
+    $('schemeSub').textContent = "The midwife's latest plan. Add one to keep it one tap away.";
+  }
+}
+
+function openSchemeModal() {
+  setSchemeMode(state.schemes.length ? 'view' : 'empty');
+  showModal(schemeModal);
+}
+
+function formatSchemeMeta(scheme) {
+  if (!scheme) return '';
+  const ts = scheme.updatedAt ? new Date(scheme.updatedAt) : null;
+  const dateStr = ts && !isNaN(ts) ? ts.toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' }) : '';
+  const who = scheme.user && scheme.user !== 'system' ? ` by ${scheme.user}` : '';
+  if (!dateStr) return who.trim() || '';
+  return `Updated ${dateStr}${who}`;
+}
+
+function renderSchemeHistory() {
+  // Skip the active (newest) version — it's already shown at the top.
+  const past = state.schemes.slice(1);
+  $('schemeHistoryCount').textContent = past.length ? `(${past.length})` : '';
+  const list = $('schemeHistoryList');
+  list.innerHTML = past.map(s => {
+    const ts = s.updatedAt ? new Date(s.updatedAt) : null;
+    const dateStr = ts && !isNaN(ts)
+      ? ts.toLocaleDateString([], { year: 'numeric', month: 'short', day: 'numeric' })
+      : '—';
+    const who = s.user && s.user !== 'system' ? ` · ${escapeHtml(s.user)}` : '';
+    return `
+      <details class="scheme-history-item">
+        <summary>
+          <span class="scheme-history-date">${escapeHtml(dateStr)}</span>
+          <span class="scheme-history-meta">${who}</span>
+        </summary>
+        <pre>${escapeHtml(s.text || '')}</pre>
+      </details>
+    `;
+  }).join('');
+}
+
+async function saveScheme() {
+  const text = ($('schemeTextarea').value || '').trim();
+  if (!text) {
+    showError($('schemeError'), 'Scheme text is empty. Type something or tap Cancel.');
+    return;
+  }
+  hideError($('schemeError'));
+  try {
+    setBusy($('schemeSave'), true);
+    // Server is the source of truth for id + updatedAt — we don't
+    // optimistically prepend so the displayed "Updated …" line never
+    // disagrees with what other devices see.
+    const data = await api('add-scheme', { scheme: { text } });
+    if (data.scheme) {
+      state.schemes = [data.scheme, ...state.schemes];
+      saveCache();
+    }
+    hideModal(schemeModal);
+  } catch (err) {
+    showError($('schemeError'), err.message);
+  } finally {
+    setBusy($('schemeSave'), false);
   }
 }
 

@@ -138,81 +138,6 @@ undone by copying rows back from yesterday's backup.
 
 ---
 
-### 7. Midwife feeding-scheme reference
-
-**Why.** Every couple of weeks the midwife hands us a new feeding plan —
-frequencies, day vs night routines, formula amounts, when to wake the
-baby — written on post-its that end up on the fridge. They are easy to
-lose and impossible to consult one-handed at 3am. We want the **latest
-scheme one tap away inside the app**, with **previous versions kept**
-so we can see how the plan evolved (and recover from a bad rewrite).
-
-**What the user sees.**
-
-- An **info icon** in the app header, next to the Settings cog. Tapping
-  it opens a **scheme overlay**.
-- The overlay shows the **most recent scheme** as plain multi-line text
-  with formatting preserved (line breaks, indentation), plus the date
-  it was saved (and optionally the user who saved it). Long content
-  scrolls inside the overlay.
-- The overlay has a **View / Edit** toggle. In Edit mode the text
-  becomes a textarea pre-filled with the current scheme. **Save**
-  closes the overlay and the new version is now what other devices see.
-- A small **"Previous versions"** disclosure inside the overlay lists
-  earlier schemes (date + collapsed preview, expandable) so the family
-  can compare what changed.
-- First-run state: the overlay reads "No scheme saved yet" with an
-  **Add scheme** primary action that drops straight into Edit mode.
-
-**What the system does.**
-
-- A new sheet tab `schemes` stores one row per saved version. Suggested
-  columns: `id`, `updated_at` (ISO timestamp), `text` (multi-line),
-  `user`. Append-only — saves **never overwrite** an existing row.
-- The frontend always renders the row with the most recent
-  `updated_at`. Older rows are loaded on demand for the "Previous
-  versions" list.
-- Reads piggyback on the existing bootstrap call (one extra array in
-  the response); writes are a new endpoint that appends a row.
-
-**Example scheme** (the one currently on our fridge, transcribed from a
-photo of three post-its labelled *Brust oft*, *Tagespause*,
-*Nachtpause*):
-
-```
-Brust oft
-  so viel wie sie will
-  12-14 pro Tag, mehr kein Problem
-  2|2 nicht gut
-
-Tagespause
-  R. bekommt 60 ml PRE ohne Brust
-  1.5-2 Stunden Pause
-
-Nachtpause
-  bis 100 ml PRE (mind. 70)
-  danach schlafen so viel wie geht
-  max 4 Stunden, sonst wecken und Brust
-```
-
-**Notes.**
-
-- The scheme is **purely informational**. The app does not parse it or
-  use it to drive any behaviour — countdowns, the formula limit, the
-  chain prompt etc. continue to read the structured Settings values.
-  Two sources of truth (free-text + structured) silently disagreeing
-  would be worse than just keeping the note as a note.
-- **Empty-string saves are rejected.** To "remove" a scheme the user
-  can save a stub like `(no scheme)`. Preserving the append-only history
-  matters more than letting a slip-up wipe a midwife instruction.
-- Concurrency: last write wins for *which version is the "latest"*, but
-  because saves are append-only, simultaneous edits from two devices
-  produce two history rows — nothing is silently lost.
-- No length limit beyond what's practical (a few KB per scheme is fine
-  in a single sheet cell).
-- The overlay is launched from the global header so it is reachable from
-  every tab, not just the home screen.
-
 ---
 
 ## Done
@@ -240,3 +165,9 @@ Nachtpause
   earliest non-comfort start, and "Feeds today" counts a chain as one
   session. Default: empty (opt-in, no behaviour change for existing
   families).
+- **7. Midwife feeding-scheme reference** (2026-05-12) — new info icon
+  in the header opens an overlay showing the latest free-text feeding
+  plan with View ↔ Edit toggle; saving appends a new row to a fresh
+  `schemes` sheet tab so previous versions are kept and listed in a
+  "Previous versions" disclosure. Backend seeds the tab with the
+  current plan on first run.

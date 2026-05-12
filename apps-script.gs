@@ -18,12 +18,36 @@
 const ENTRIES_SHEET = 'feedings';
 const SETTINGS_SHEET = 'settings';
 const WEIGHT_SHEET = 'weight';
+const SCHEMES_SHEET = 'schemes';
 const ENTRIES_HEADERS = [
   'id','createdAt','updatedAt','user','type',
   'start','end','durationSec','volumeMl','source','deleted','isComfort'
 ];
 const WEIGHT_HEADERS = ['id','createdAt','updatedAt','date','weightG','timing','deleted'];
 const SETTINGS_HEADERS = ['key','value'];
+// Append-only history of feeding-scheme notes from the midwife. Each save
+// appends a new row; nothing is ever overwritten so old guidance is
+// recoverable. The frontend always renders the row with the highest
+// updatedAt and lets the user expand the rest.
+const SCHEMES_HEADERS = ['id','updatedAt','text','user'];
+
+// Seeded into the schemes tab on first creation so the family already has
+// the current plan in the app instead of an empty placeholder. Replaceable
+// at any time via the in-app editor (which appends a new row).
+const DEFAULT_SCHEME_TEXT =
+  'Brust oft\n' +
+  '  so viel wie sie will\n' +
+  '  12-14 pro Tag, mehr kein Problem\n' +
+  '  2|2 nicht gut\n' +
+  '\n' +
+  'Tagespause\n' +
+  '  R. bekommt 60 ml PRE ohne Brust\n' +
+  '  1.5-2 Stunden Pause\n' +
+  '\n' +
+  'Nachtpause\n' +
+  '  bis 100 ml PRE (mind. 70)\n' +
+  '  danach schlafen so viel wie geht\n' +
+  '  max 4 Stunden, sonst wecken und Brust';
 
 function doGet(e) {
   return jsonOutput_({
@@ -72,6 +96,7 @@ function doPost(e) {
       case 'add-weight':      return jsonOutput_({ ok: true, weight: addWeight_(body.weight) });
       case 'update-weight':   return jsonOutput_({ ok: true, weight: updateWeight_(body.weight) });
       case 'delete-weight':   return jsonOutput_({ ok: true, id: deleteWeight_(body.id) });
+      case 'add-scheme':      return jsonOutput_({ ok: true, scheme: addScheme_(body.scheme, body.user) });
       default:                return jsonOutput_({ ok: false, error: 'Unknown action: ' + action });
     }
   } catch (err) {
@@ -126,6 +151,14 @@ function ensureInit_() {
     ];
     settings.getRange(2, 1, defaults.length, 2).setValues(defaults);
   }
+  // Schemes tab + first-version seed. We seed only when the tab is empty so
+  // existing installs don't get a stray "default" row added on top of their
+  // own history; new installs always start with the example so the info icon
+  // has something to show before the user has typed anything.
+  const schemes = getSheet_(SCHEMES_SHEET, SCHEMES_HEADERS);
+  if (schemes.getLastRow() < 2) {
+    schemes.appendRow([Utilities.getUuid(), new Date(), DEFAULT_SCHEME_TEXT, 'system']);
+  }
 }
 
 function checkPasscode_(p) {
@@ -147,6 +180,7 @@ function bootstrap_() {
     settings: readSettings_(),
     entries: listEntries_(),
     weights: listWeights_(),
+    schemes: listSchemes_(),
   };
 }
 
@@ -432,4 +466,43 @@ function updateSettings_(patch) {
     }
   });
   return readSettings_();
+}
+
+// ---------- schemes (midwife feeding-scheme reference) ----------
+
+function listSchemes_() {
+  const s = getSheet_(SCHEMES_SHEET, SCHEMES_HEADERS);
+  const data = s.getDataRange().getValues();
+  if (data.length < 2) return [];
+  const out = [];
+  for (let i = 1; i < data.length; i++) {
+    const r = data[i];
+    if (!r[0]) continue;
+    out.push({
+      id: String(r[0]),
+      updatedAt: r[1] instanceof Date ? r[1].toISOString() : String(r[1] || ''),
+      text: String(r[2] || ''),
+      user: r[3] || null,
+    });
+  }
+  // Newest first so the client can read out[0] to get the active scheme
+  // without scanning. Sort key is updatedAt; falls back to spreadsheet
+  // order on ties (lexicographic ISO string compare is monotonic).
+  out.sort((a, b) => (a.updatedAt < b.updatedAt ? 1 : a.updatedAt > b.updatedAt ? -1 : 0));
+  return out;
+}
+
+function addScheme_(scheme, user) {
+  const text = String((scheme && scheme.text) || '').trim();
+  if (!text) throw new Error('Empty scheme');
+  ensureInit_();
+  const s = getSheet_(SCHEMES_SHEET, SCHEMES_HEADERS);
+  const now = new Date();
+  const id = Utilities.getUuid();
+  // We deliberately store the *raw* (untrimmed-internally) text so the user
+  // sees their formatting exactly as they typed it. Only outer whitespace
+  // is stripped above to reject blank saves.
+  const userField = user || (scheme && scheme.user) || 'Unknown';
+  s.appendRow([id, now, scheme.text, userField]);
+  return { id, updatedAt: now.toISOString(), text: scheme.text, user: userField };
 }

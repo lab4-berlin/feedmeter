@@ -11,7 +11,7 @@
   <link rel="manifest" href="manifest.webmanifest" />
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23f7c8d4'/%3E%3Ccircle cx='32' cy='28' r='10' fill='%23fff'/%3E%3Crect x='28' y='34' width='8' height='18' rx='4' fill='%23fff'/%3E%3C/svg%3E" />
   <link rel="apple-touch-icon" href="icon-192.svg" />
-  <link rel="stylesheet" href="styles.css?v=29" />
+  <link rel="stylesheet" href="styles.css?v=30" />
 </head>
 <body>
   <header class="app-header">
@@ -23,6 +23,9 @@
       <button class="user-chip hidden" id="userChip" title="Switch user" aria-label="Switch user">
         <span class="user-chip-avatar" id="userChipAvatar">·</span>
         <span class="user-chip-name" id="userChipName"></span>
+      </button>
+      <button class="header-btn" id="schemeBtn" title="Feeding scheme" aria-label="Feeding scheme">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="17"/><circle cx="12" cy="7.5" r="0.6" fill="currentColor"/></svg>
       </button>
       <button class="header-btn" id="settingsBtn" title="Settings" aria-label="Settings">
         <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -291,6 +294,41 @@
     </div>
   </div>
 
+  <!-- Feeding-scheme reference modal: latest scheme + history -->
+  <div class="modal hidden" id="schemeModal" role="dialog" aria-modal="true" aria-labelledby="schemeTitle">
+    <div class="modal-card">
+      <h3 id="schemeTitle">Feeding scheme</h3>
+      <p class="modal-sub" id="schemeSub">The midwife's latest plan. Tap Edit when it changes.</p>
+
+      <pre class="scheme-text hidden" id="schemeText"></pre>
+
+      <div class="field hidden" id="schemeEditField">
+        <label for="schemeTextarea">Scheme text</label>
+        <textarea id="schemeTextarea" rows="14" placeholder="Brust oft&#10;  so viel wie sie will&#10;  …"></textarea>
+        <p class="field-hint">Saving creates a new version. The previous one is kept in the history below.</p>
+      </div>
+
+      <p class="scheme-empty-msg hidden" id="schemeEmpty">No scheme saved yet. Add the midwife's instructions to keep them one tap away.</p>
+
+      <div class="modal-error hidden" id="schemeError"></div>
+
+      <details class="scheme-history hidden" id="schemeHistory">
+        <summary>Previous versions <span class="muted" id="schemeHistoryCount"></span></summary>
+        <div class="scheme-history-list" id="schemeHistoryList"></div>
+      </details>
+
+      <div class="modal-actions space-between">
+        <button class="btn ghost" id="schemeClose" type="button">Close</button>
+        <div>
+          <button class="btn ghost hidden" id="schemeCancelEdit" type="button">Cancel</button>
+          <button class="btn primary" id="schemeEditBtn" type="button">Edit</button>
+          <button class="btn primary hidden" id="schemeAdd" type="button">Add scheme</button>
+          <button class="btn primary hidden" id="schemeSave" type="button">Save</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Settings modal -->
   <div class="modal hidden" id="settingsModal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle">
     <div class="modal-card">
@@ -512,6 +550,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=30"></script>
+  <script src="app.js?v=31"></script>
 </body>
 </html>
