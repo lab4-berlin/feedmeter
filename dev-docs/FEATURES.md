@@ -3,9 +3,82 @@
 Each entry below is a user story for a future change. Keep them short and
 implementation-agnostic — the *what* and *why*, not the *how*.
 
+## Format reference
+
+This file has three sections:
+
+- **Format reference** (this section) — the templates below.
+- **To do** — open feature specs, one `### N. Title` block per
+  feature, written in full following the backlog template.
+- **Done** — one-line recap per shipped feature, in numeric order.
+
+New features go to **To do**; once shipped they get rewritten into a
+one-liner and moved to **Done**. Keep the format consistent so future
+maintainers (humans or agents) have a template to copy from even when
+the To-do list is empty.
+
+### To-do entry
+
+```
+### N. <Short title>
+
+**Why.** 1-3 sentences on the user pain or motivation. Concrete and
+honest — no marketing voice.
+
+**What the user sees.** (or just **What.** if there's no UI)
+- Bullets describing the user-facing behaviour. Implementation-agnostic.
+- Mention any new UI surface (button, modal, tab, badge…) and where it
+  lives in the existing app.
+- Call out edge cases the user can hit (empty state, conflicts, etc).
+
+**What the system does.** (only when relevant — e.g. backend-only
+features or cross-device behaviour)
+- Bullets describing the data shape, sheet tabs, sync rules, etc, but
+  still in terms of *behaviour*, not code structure.
+
+**Example** (optional). A concrete walk-through, sample text, or a
+worked numeric scenario. Use a fenced code block when it's verbatim
+content (rules text, JSON, sample message).
+
+**Notes.** Bulleted decisions, trade-offs, and explicit non-goals. Each
+note should answer a question a reviewer might ask ("what about X?",
+"why not Y?"). This is where you record *why a thing is the way it is*
+without dragging the spec itself into implementation details.
+```
+
+Numbering is **global and append-only**: pick the next integer after
+the highest one used anywhere in the file (To do *or* Done). Numbers
+are never reused, even if a To-do entry is dropped.
+
+### Done entry
+
+When a backlog item ships, replace its full spec with a one-line
+summary at the bottom of the `# Done` section, in this shape:
+
+```
+- **N. <Short title>** (commit `<sha>`, YYYY-MM-DD) — one-sentence
+  recap of what changed, in past tense. If the feature shipped across
+  several commits, list the primary one and parenthesise follow-ups
+  inline (e.g. "duplicate-row race fixed in `<sha>`, YYYY-MM-DD").
+```
+
+Keep the recap concrete enough that someone scanning Done a year later
+knows what the feature *did*, not just its name.
+
+### Workflow
+
+1. New idea → add as the next-numbered entry under **To do**,
+   following the template above.
+2. Implementation → keep the To-do entry untouched while building
+   (it's the contract).
+3. Ship → squash the entry into the Done one-liner with the commit sha
+   and date. Remove the original To-do block.
+
 ---
 
-## 6. Daily round-robin backups of the data tabs
+## To do
+
+### 6. Daily round-robin backups of the data tabs
 
 **Why.** A single accidental delete (someone fat-fingers the wrong entry,
 or a stale device pushes old state, or a manual edit in the sheet goes
@@ -65,7 +138,84 @@ undone by copying rows back from yesterday's backup.
 
 ---
 
-# Done
+### 7. Midwife feeding-scheme reference
+
+**Why.** Every couple of weeks the midwife hands us a new feeding plan —
+frequencies, day vs night routines, formula amounts, when to wake the
+baby — written on post-its that end up on the fridge. They are easy to
+lose and impossible to consult one-handed at 3am. We want the **latest
+scheme one tap away inside the app**, with **previous versions kept**
+so we can see how the plan evolved (and recover from a bad rewrite).
+
+**What the user sees.**
+
+- An **info icon** in the app header, next to the Settings cog. Tapping
+  it opens a **scheme overlay**.
+- The overlay shows the **most recent scheme** as plain multi-line text
+  with formatting preserved (line breaks, indentation), plus the date
+  it was saved (and optionally the user who saved it). Long content
+  scrolls inside the overlay.
+- The overlay has a **View / Edit** toggle. In Edit mode the text
+  becomes a textarea pre-filled with the current scheme. **Save**
+  closes the overlay and the new version is now what other devices see.
+- A small **"Previous versions"** disclosure inside the overlay lists
+  earlier schemes (date + collapsed preview, expandable) so the family
+  can compare what changed.
+- First-run state: the overlay reads "No scheme saved yet" with an
+  **Add scheme** primary action that drops straight into Edit mode.
+
+**What the system does.**
+
+- A new sheet tab `schemes` stores one row per saved version. Suggested
+  columns: `id`, `updated_at` (ISO timestamp), `text` (multi-line),
+  `user`. Append-only — saves **never overwrite** an existing row.
+- The frontend always renders the row with the most recent
+  `updated_at`. Older rows are loaded on demand for the "Previous
+  versions" list.
+- Reads piggyback on the existing bootstrap call (one extra array in
+  the response); writes are a new endpoint that appends a row.
+
+**Example scheme** (the one currently on our fridge, transcribed from a
+photo of three post-its labelled *Brust oft*, *Tagespause*,
+*Nachtpause*):
+
+```
+Brust oft
+  so viel wie sie will
+  12-14 pro Tag, mehr kein Problem
+  2|2 nicht gut
+
+Tagespause
+  R. bekommt 60 ml PRE ohne Brust
+  1.5-2 Stunden Pause
+
+Nachtpause
+  bis 100 ml PRE (mind. 70)
+  danach schlafen so viel wie geht
+  max 4 Stunden, sonst wecken und Brust
+```
+
+**Notes.**
+
+- The scheme is **purely informational**. The app does not parse it or
+  use it to drive any behaviour — countdowns, the formula limit, the
+  chain prompt etc. continue to read the structured Settings values.
+  Two sources of truth (free-text + structured) silently disagreeing
+  would be worse than just keeping the note as a note.
+- **Empty-string saves are rejected.** To "remove" a scheme the user
+  can save a stub like `(no scheme)`. Preserving the append-only history
+  matters more than letting a slip-up wipe a midwife instruction.
+- Concurrency: last write wins for *which version is the "latest"*, but
+  because saves are append-only, simultaneous edits from two devices
+  produce two history rows — nothing is silently lost.
+- No length limit beyond what's practical (a few KB per scheme is fine
+  in a single sheet cell).
+- The overlay is launched from the global header so it is reachable from
+  every tab, not just the home screen.
+
+---
+
+## Done
 
 - **1. Restructure top stats** (commit `4efc5ef`, 2026-05-07) — split the
   top metrics into a feeding/pumping status row plus a today-details row
